@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to QEMU (AArch64)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
+      "miDebuggerServerAddress": "localhost:1234",
+      "miDebuggerPath": "gdb",
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": true,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "Run QEMU"
+    }
+  ]
+}
