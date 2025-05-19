@@ -2,9 +2,9 @@
 #![no_std]
 #![feature(asm_experimental_arch)]
 
-use core::panic::PanicInfo;
+use core::{arch::asm, panic::PanicInfo};
 
-use gpio::{pull_down_gpio47, pull_up_gpio47};
+use gpio::{pull_down_gpio29, pull_up_gpio29};
 
 mod gpio;
 mod uart;
@@ -12,18 +12,20 @@ mod uart;
 #[panic_handler]
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
+        pull_up_gpio29();
         uart::print("Panic");
     }
 }
 
 #[no_mangle]
-#[unsafe(naked)]
-pub extern "C" fn _start() -> ! {
-    core::arch::naked_asm!("mov sp, #0x80000", "bl main");
+#[link_section = ".text._start"]
+pub unsafe extern "C" fn _start() {
+    asm!("ldr x0, =0x8004000", "mov sp, x0");
+    main();
 }
 
 #[no_mangle]
-fn main() {
+extern "C" fn main() {
     uart::configure_uart();
 
     // Delay so clock speed can stabilize
@@ -31,10 +33,10 @@ fn main() {
     uart::print("Hello World!\n");
 
     loop {
-        pull_up_gpio47();
-        unsafe { delay(10_000_000) } // ~0.5s
-        pull_down_gpio47();
-        unsafe { delay(10_000_000) }
+        pull_up_gpio29();
+        unsafe { delay(1_000_000) }
+        pull_down_gpio29();
+        unsafe { delay(1_000_000) }
     }
 }
 
