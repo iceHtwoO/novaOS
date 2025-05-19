@@ -1,30 +1,52 @@
-use crate::{
-    delay,
-    uart::{self},
-};
+use crate::uart::{self};
 
-const GPFSEL2: u32 = 0x3F20_0008; //GPIO 20-29
-const GPFSEL4: u32 = 0x3F20_0010; //GPIO 40-49
-const GPSET0: u32 = 0x3F20_001C;
-const GPCLR0: u32 = 0x3F20_0028;
+const GPFSEL_BASE: u32 = 0x3F20_0000;
+const GPSET_BASE: u32 = 0x3F20_001C;
+const GPCLR_BASE: u32 = 0x3F20_0028;
 
-unsafe fn set_gpio29_to_output() {
-    let value: u32 = 0b001 << 27;
+unsafe fn set_gpio_to_output(gpio: u8) -> Result<(), &'static str> {
+    if gpio > 53 {
+        return Err("GPIO out of range");
+    }
 
-    core::ptr::write_volatile(GPFSEL2 as *mut u32, value);
+    let register_index = gpio / 10;
+    let register_offset = (gpio % 10) * 3;
+    let register_addr = GPFSEL_BASE + (register_index as u32 * 4);
+
+    let current = core::ptr::read_volatile(register_addr as *const u32);
+
+    let mask = !(0b111 << register_offset);
+    let cleared = current & mask;
+
+    let new_val = cleared | (0b001 << register_offset);
+
+    core::ptr::write_volatile(register_addr as *mut u32, new_val);
+    Ok(())
 }
 
-pub fn pull_up_gpio29() {
+pub fn pull_up_gpio(gpio: u8) -> Result<(), &'static str> {
     unsafe {
         uart::print("Pull Up\n");
-        set_gpio29_to_output();
-        core::ptr::write_volatile(GPSET0 as *mut u32, 1 << 29);
+        set_gpio_to_output(29)?;
+
+        let register_index = gpio / 32;
+        let register_offset = gpio % 32;
+        let register_addr = GPSET_BASE + (register_index as u32 * 4);
+
+        core::ptr::write_volatile(register_addr as *mut u32, 1 << register_offset);
     }
+    Ok(())
 }
 
-pub fn pull_down_gpio29() {
+pub fn pull_down_gpio(gpio: u8) -> Result<(), &'static str> {
     unsafe {
         uart::print("Pull Down\n");
-        core::ptr::write_volatile(GPCLR0 as *mut u32, 1 << 29);
+
+        let register_index = gpio / 32;
+        let register_offset = gpio % 32;
+        let register_addr = GPCLR_BASE + (register_index as u32 * 4);
+
+        core::ptr::write_volatile(register_addr as *mut u32, 1 << register_offset);
     }
+    Ok(())
 }

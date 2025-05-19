@@ -4,7 +4,7 @@
 
 use core::{arch::asm, panic::PanicInfo};
 
-use gpio::{pull_down_gpio29, pull_up_gpio29};
+use gpio::{pull_down_gpio, pull_up_gpio};
 
 mod gpio;
 mod uart;
@@ -12,7 +12,6 @@ mod uart;
 #[panic_handler]
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
-        pull_up_gpio29();
         uart::print("Panic");
     }
 }
@@ -33,9 +32,9 @@ extern "C" fn main() {
     uart::print("Hello World!\n");
 
     loop {
-        pull_up_gpio29();
+        let _ = pull_up_gpio(29);
         unsafe { delay(1_000_000) }
-        pull_down_gpio29();
+        let _ = pull_down_gpio(29);
         unsafe { delay(1_000_000) }
     }
 }
