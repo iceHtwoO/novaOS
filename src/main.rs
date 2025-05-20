@@ -4,7 +4,7 @@
 
 use core::{arch::asm, panic::PanicInfo};
 
-use gpio::{pull_down_gpio, pull_up_gpio};
+use gpio::{gpio_high, gpio_low, set_gpio_state};
 
 mod gpio;
 mod uart;
@@ -26,15 +26,18 @@ pub unsafe extern "C" fn _start() {
 #[no_mangle]
 extern "C" fn main() {
     uart::configure_uart();
+    unsafe {
+        let _ = set_gpio_state(29, gpio::GPIOState::output);
+    }
 
     // Delay so clock speed can stabilize
     unsafe { delay(50000) }
     uart::print("Hello World!\n");
 
     loop {
-        let _ = pull_up_gpio(29);
+        let _ = gpio_high(29);
         unsafe { delay(1_000_000) }
-        let _ = pull_down_gpio(29);
+        let _ = gpio_low(29);
         unsafe { delay(1_000_000) }
     }
 }
