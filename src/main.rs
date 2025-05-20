@@ -30,6 +30,8 @@ extern "C" fn main() {
     uart::configure_uart();
     unsafe {
         let _ = set_gpio_state(29, gpio::GPIOState::Output);
+        let _ = set_gpio_state(14, gpio::GPIOState::Alternative0);
+        let _ = set_gpio_state(15, gpio::GPIOState::Alternative0);
     }
 
     // Delay so clock speed can stabilize
