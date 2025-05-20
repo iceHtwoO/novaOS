@@ -23,6 +23,8 @@ pub fn print(s: &str) {
             core::ptr::write_volatile(UART0_DR as *mut u32, byte as u32);
         }
     }
+    // wait till uart is not busy anymore
+    unsafe { while (core::ptr::read_volatile(UART0_FR as *const u32) >> 3) & 0b1 != 0 {} }
 }
 
 pub fn configure_uart() {

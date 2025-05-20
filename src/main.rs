@@ -5,8 +5,10 @@
 use core::{arch::asm, panic::PanicInfo};
 
 use gpio::{gpio_high, gpio_low, set_gpio_state};
+use timer::{delay_nops, sleep};
 
 mod gpio;
+mod timer;
 mod uart;
 
 #[panic_handler]
@@ -31,20 +33,13 @@ extern "C" fn main() {
     }
 
     // Delay so clock speed can stabilize
-    unsafe { delay(50000) }
+    unsafe { delay_nops(50000) }
     uart::print("Hello World!\n");
 
     loop {
         let _ = gpio_high(29);
-        unsafe { delay(1_000_000) }
+        unsafe { sleep(500_000) } // 0.5s
         let _ = gpio_low(29);
-        unsafe { delay(1_000_000) }
-    }
-}
-
-unsafe fn delay(count: u32) {
-    for _ in 0..count {
-        // Prevent compiler optimizing away the loop
-        core::arch::asm!("nop");
+        unsafe { sleep(500_000) } // 0.5s
     }
 }
