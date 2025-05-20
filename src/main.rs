@@ -27,7 +27,7 @@ pub unsafe extern "C" fn _start() {
 extern "C" fn main() {
     uart::configure_uart();
     unsafe {
-        let _ = set_gpio_state(29, gpio::GPIOState::output);
+        let _ = set_gpio_state(29, gpio::GPIOState::Output);
     }
 
     // Delay so clock speed can stabilize

@@ -1,3 +1,4 @@
 kernel=kernel8.img
 arm_64bit=1
 enable_uart=1
+program_usb_boot_mode=1
