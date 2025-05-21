@@ -1,9 +1,16 @@
-use crate::uart::{self};
+use core::ptr::{read_volatile, write_volatile};
+
+use crate::{
+    timer::delay_nops,
+    uart::{self},
+};
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;
 const GPSET_BASE: u32 = 0x3F20_001C;
 const GPCLR_BASE: u32 = 0x3F20_0028;
 const GPLEV_BASE: u32 = 0x3F20_0034;
+const GPPUD: u32 = 0x3F20_0094;
+const GPPUDCLK_BASE: u32 = 0x3F20_0098;
 
 #[repr(u32)]
 pub enum GPIOState {
@@ -39,8 +46,6 @@ pub unsafe fn set_gpio_state(gpio: u8, state: GPIOState) -> Result<(), &'static 
 
 pub fn gpio_high(gpio: u8) -> Result<(), &'static str> {
     unsafe {
-        uart::print("Pull Up\n");
-
         let register_index = gpio / 32;
         let register_offset = gpio % 32;
         let register_addr = GPSET_BASE + (register_index as u32 * 4);
@@ -52,8 +57,6 @@ pub fn gpio_high(gpio: u8) -> Result<(), &'static str> {
 
 pub fn gpio_low(gpio: u8) -> Result<(), &'static str> {
     unsafe {
-        uart::print("Pull Down\n");
-
         let register_index = gpio / 32;
         let register_offset = gpio % 32;
         let register_addr = GPCLR_BASE + (register_index as u32 * 4);
@@ -71,5 +74,40 @@ pub fn gpio_get_state(gpio: u8) -> u8 {
 
         let state = core::ptr::read_volatile(register_addr as *mut u32);
         return ((state >> register_offset) & 0b1) as u8;
+    }
+}
+
+pub fn gpio_pull_up(gpio: u8) {
+    gpio_pull_up_down(gpio, 0b10);
+}
+
+pub fn gpio_pull_down(gpio: u8) {
+    gpio_pull_up_down(gpio, 0b01);
+}
+
+fn gpio_pull_up_down(gpio: u8, val: u32) {
+    unsafe {
+        // Determine GPPUDCLK Register
+        let register_addr = gpio / 32;
+        let register_offset = gpio % 32;
+
+        // 1. Write Pull up
+        write_volatile(GPPUD as *mut u32, val);
+
+        // 2. Delay 150 cycles
+        delay_nops(150);
+
+        // 3. Write to clock
+        let new_val = 0b1 << register_offset;
+        write_volatile(register_addr as *mut u32, new_val);
+
+        // 4. Delay 150 cycles
+        delay_nops(150);
+
+        // 5. reset GPPUD
+        write_volatile(GPPUD as *mut u32, 0);
+
+        // 6. reset clock
+        write_volatile(register_addr as *mut u32, 0);
     }
 }
