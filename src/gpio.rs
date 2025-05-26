@@ -24,7 +24,7 @@ pub enum GPIOState {
     Alternative5 = 0b010,
 }
 
-pub unsafe fn set_gpio_state(gpio: u8, state: GPIOState) -> Result<(), &'static str> {
+pub fn set_gpio_state(gpio: u8, state: GPIOState) -> Result<(), &'static str> {
     if gpio > 53 {
         return Err("GPIO out of range");
     }
@@ -32,15 +32,16 @@ pub unsafe fn set_gpio_state(gpio: u8, state: GPIOState) -> Result<(), &'static 
     let register_index = gpio / 10;
     let register_offset = (gpio % 10) * 3;
     let register_addr = GPFSEL_BASE + (register_index as u32 * 4);
+    unsafe {
+        let current = core::ptr::read_volatile(register_addr as *const u32);
 
-    let current = core::ptr::read_volatile(register_addr as *const u32);
+        let mask = !(0b111 << register_offset);
+        let cleared = current & mask;
 
-    let mask = !(0b111 << register_offset);
-    let cleared = current & mask;
+        let new_val = cleared | ((state as u32) << register_offset);
 
-    let new_val = cleared | ((state as u32) << register_offset);
-
-    core::ptr::write_volatile(register_addr as *mut u32, new_val);
+        core::ptr::write_volatile(register_addr as *mut u32, new_val);
+    }
     Ok(())
 }
 
@@ -88,7 +89,7 @@ pub fn gpio_pull_down(gpio: u8) {
 fn gpio_pull_up_down(gpio: u8, val: u32) {
     unsafe {
         // Determine GPPUDCLK Register
-        let register_addr = gpio / 32;
+        let register_addr = GPPUDCLK_BASE + 4 * (gpio as u32 / 32);
         let register_offset = gpio % 32;
 
         // 1. Write Pull up

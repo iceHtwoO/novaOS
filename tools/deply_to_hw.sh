@@ -15,7 +15,7 @@ REMOTE_DIR="$TFTP_PATH"
 
 # === BUILD ===
 echo "[*] Building kernel..."
-eval $BUILD_COMMAND
+cargo build --release
 
 # === CONVERT TO IMG ===
 echo "[*] Convert kernel elf to img..."
