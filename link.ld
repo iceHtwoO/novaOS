@@ -1,7 +1,7 @@
 SECTIONS {
     . = 0x80000;
 
-    .text : {
+    .text ALIGN(4) : {
         KEEP(*(.text._start))
         *(.text .text.*)
     }
@@ -22,6 +22,18 @@ SECTIONS {
         *(COMMON)
         __bss_end = .;
     }
+
+    .vector_table ALIGN(2048) : {
+        KEEP(*(.vector_table))
+    }
+
+    .stack 0x8008000 : ALIGN(16)
+    {
+    __stack_start = .;
+    .+=0x10000;
+    __stack_end = .;
+    }
+
 
     _end = .;
 }

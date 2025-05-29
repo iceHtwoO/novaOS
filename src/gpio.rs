@@ -11,6 +11,8 @@ const GPCLR_BASE: u32 = 0x3F20_0028;
 const GPLEV_BASE: u32 = 0x3F20_0034;
 const GPPUD: u32 = 0x3F20_0094;
 const GPPUDCLK_BASE: u32 = 0x3F20_0098;
+const GPREN_BASE: u32 = 0x3F20_004C;
+const GPFEN_BASE: u32 = 0x3F20_0058;
 
 #[repr(u32)]
 pub enum GPIOState {
@@ -110,5 +112,42 @@ fn gpio_pull_up_down(gpio: u8, val: u32) {
 
         // 6. reset clock
         write_volatile(register_addr as *mut u32, 0);
+    }
+}
+
+pub fn gpio_enable_low_detect(gpio: u8, enable: bool) {
+    unsafe {
+        // Determine GPLEN Register
+        let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
+        let register_offset = gpio % 32;
+
+        let current = read_volatile(register_addr as *const u32);
+        let mask = 0b1 << register_offset;
+        let new_val = if enable {
+            current | mask
+        } else {
+            current & !mask
+        };
+
+        write_volatile(register_addr as *mut u32, new_val);
+    }
+}
+
+pub fn gpio_enable_high_detect(gpio: u8, enable: bool) {
+    unsafe {
+        // Determine GPHEN Register
+        let register_addr = GPREN_BASE + 4 * (gpio as u32 / 32);
+        let register_offset = gpio % 32;
+
+        let current = read_volatile(register_addr as *const u32);
+
+        let mask = 0b1 << register_offset;
+        let new_val = if enable {
+            current | mask
+        } else {
+            current & !mask
+        };
+
+        write_volatile(register_addr as *mut u32, new_val);
     }
 }

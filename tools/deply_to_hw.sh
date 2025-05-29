@@ -6,23 +6,23 @@ set -a
 source ../.env
 set +a
 
-set -e  # Stop on errors
+set -e
 
 
-# === RESOLVE VARIABLES ===
+# RESOLVE VARIABLES
 REMOTE="$REMOTE_USER@$REMOTE_HOST"
 REMOTE_DIR="$TFTP_PATH"
 
-# === BUILD ===
+# BUILD
 echo "[*] Building kernel..."
 cargo build --release
 
-# === CONVERT TO IMG ===
+# CONVERT TO IMG
 echo "[*] Convert kernel elf to img..."
 llvm-objcopy -O binary "../$BUILD_PATH/$BINARY_NAME" ../$BUILD_PATH/kernel8.img
 
 
-# === COPY TO TFTP ===
+# COPY TO TFTP
 echo "[*] Copying firmware files to TFTP server..."
 scp ../firmware_files/* "$REMOTE:$REMOTE_DIR/."
 echo "[*] Copying kernel to TFTP server..."

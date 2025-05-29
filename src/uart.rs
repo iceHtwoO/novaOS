@@ -27,7 +27,7 @@ pub fn print(s: &str) {
     unsafe { while (core::ptr::read_volatile(UART0_FR as *const u32) >> 3) & 0b1 != 0 {} }
 }
 
-pub fn configure_uart() {
+pub fn uart_init() {
     let baud_div_times_64 = (UART_CLK * 4) / BAUD;
 
     let ibrd = baud_div_times_64 / 64;
@@ -45,6 +45,7 @@ pub fn configure_uart() {
         // Enable transmit and uart
         let mut cr = core::ptr::read_volatile(UART0_CR as *mut u32);
         cr |= UART0_CR_UARTEN | UART0_CR_TXE;
+
         core::ptr::write_volatile(UART0_CR as *mut u32, cr);
     }
 }
