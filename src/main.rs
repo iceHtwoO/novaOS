@@ -7,17 +7,15 @@ use core::{
     panic::PanicInfo,
 };
 
-use gpio::{
-    gpio_enable_low_detect, gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_gpio_state,
+use nova::{
+    gpio::{
+        gpio_enable_low_detect, gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_gpio_state,
+        GPIOState,
+    },
+    interrupt::enable_iqr_source,
+    timer::{delay_nops, sleep},
+    uart::{print, uart_init},
 };
-use interrupt::enable_iqr_source;
-use timer::{delay_nops, sleep};
-use uart::print;
-
-mod gpio;
-mod interrupt;
-mod timer;
-mod uart;
 
 global_asm!(include_str!("vector.S"));
 
@@ -28,7 +26,7 @@ extern "C" {
 #[panic_handler]
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
-        uart::print("Panic\r\n");
+        print("Panic\r\n");
     }
 }
 
@@ -46,19 +44,19 @@ pub unsafe extern "C" fn _start() {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    uart::uart_init();
+    uart_init();
     // Set ACT Led to Outout
-    let _ = set_gpio_state(21, gpio::GPIOState::Output);
+    let _ = set_gpio_state(21, GPIOState::Output);
 
     // Set GPIO Pins to UART
-    let _ = set_gpio_state(14, gpio::GPIOState::Alternative0);
-    let _ = set_gpio_state(15, gpio::GPIOState::Alternative0);
+    let _ = set_gpio_state(14, GPIOState::Alternative0);
+    let _ = set_gpio_state(15, GPIOState::Alternative0);
 
     print_current_el_str();
 
     // Delay so clock speed can stabilize
     delay_nops(50000);
-    uart::print("Hello World!\r\n");
+    print("Hello World!\r\n");
 
     unsafe {
         el2_to_el1();
@@ -69,14 +67,13 @@ pub extern "C" fn main() -> ! {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
-    let el = get_current_el();
     print_current_el_str();
 
     sleep(500_000);
 
     // Set GPIO 21 to Input
     enable_iqr_source(49); //21 is on the first GPIO bank
-    let _ = set_gpio_state(21, gpio::GPIOState::Input);
+    let _ = set_gpio_state(21, GPIOState::Input);
     gpio_pull_up(21);
     gpio_enable_low_detect(21, true);
 

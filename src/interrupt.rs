@@ -1,7 +1,4 @@
-use core::{
-    arch::asm,
-    ptr::{read_volatile, write_volatile},
-};
+use core::ptr::{read_volatile, write_volatile};
 
 use crate::uart::print;
 

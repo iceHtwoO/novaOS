@@ -1,9 +1,9 @@
 use core::ptr::{read_volatile, write_volatile};
+use core::result::Result;
+use core::result::Result::Err;
+use core::result::Result::Ok;
 
-use crate::{
-    timer::delay_nops,
-    uart::{self},
-};
+use crate::timer::delay_nops;
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;
 const GPSET_BASE: u32 = 0x3F20_001C;
