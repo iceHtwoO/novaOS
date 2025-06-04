@@ -16,6 +16,7 @@ const UART0_CR_TXE: u32 = 1 << 8;
 const UART0_LCRH: u32 = 0x3F20_102c;
 const UART0_LCRH_FEN: u32 = 1 << 4;
 
+/// Print `s` over UART
 pub fn print(s: &str) {
     for byte in s.bytes() {
         unsafe {
@@ -27,6 +28,7 @@ pub fn print(s: &str) {
     unsafe { while (core::ptr::read_volatile(UART0_FR as *const u32) >> 3) & 0b1 != 0 {} }
 }
 
+/// Initialize UART peripheral
 pub fn uart_init() {
     let baud_div_times_64 = (UART_CLK * 4) / BAUD;
 
@@ -50,6 +52,7 @@ pub fn uart_init() {
     }
 }
 
+/// Enable UARTEN
 fn uart_enable(enable: bool) {
     unsafe {
         let mut cr = core::ptr::read_volatile(UART0_CR as *mut u32);
@@ -64,6 +67,7 @@ fn uart_enable(enable: bool) {
     }
 }
 
+/// Enable UART FIFO
 fn uart_fifo_enable(enable: bool) {
     unsafe {
         let mut lcrh = core::ptr::read_volatile(UART0_LCRH as *mut u32);
@@ -78,6 +82,7 @@ fn uart_fifo_enable(enable: bool) {
     }
 }
 
+/// Set UART word length and set FIFO status
 fn uart_set_lcrh(wlen: u32, enable_fifo: bool) {
     unsafe {
         let mut value = (wlen & 0b11) << 5;

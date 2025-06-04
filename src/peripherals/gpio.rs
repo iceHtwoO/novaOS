@@ -115,7 +115,18 @@ fn gpio_pull_up_down(gpio: u8, val: u32) {
     }
 }
 
-pub fn gpio_enable_low_detect(gpio: u8, enable: bool) {
+pub fn read_falling_edge_detect(gpio: u8) -> u32 {
+    unsafe {
+        // Determine GPLEN Register
+        let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
+        let register_offset = gpio % 32;
+
+        let current = read_volatile(register_addr as *const u32);
+        return (current >> register_offset) & 0b1;
+    }
+}
+
+pub fn set_falling_edge_detect(gpio: u8, enable: bool) {
     unsafe {
         // Determine GPLEN Register
         let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
@@ -133,7 +144,7 @@ pub fn gpio_enable_low_detect(gpio: u8, enable: bool) {
     }
 }
 
-pub fn gpio_enable_high_detect(gpio: u8, enable: bool) {
+pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
     unsafe {
         // Determine GPHEN Register
         let register_addr = GPREN_BASE + 4 * (gpio as u32 / 32);

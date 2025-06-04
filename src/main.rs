@@ -8,13 +8,15 @@ use core::{
 };
 
 use nova::{
-    gpio::{
-        gpio_enable_low_detect, gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_gpio_state,
-        GPIOState,
+    irq_interrupt::enable_irq_source,
+    peripherals::{
+        gpio::{
+            gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_falling_edge_detect,
+            set_gpio_state, GPIOState,
+        },
+        uart::{print, uart_init},
     },
-    interrupt::enable_iqr_source,
-    timer::{delay_nops, sleep},
-    uart::{print, uart_init},
+    timer::{delay_nops, sleep_ms, sleep_us},
 };
 
 global_asm!(include_str!("vector.S"));
@@ -44,13 +46,10 @@ pub unsafe extern "C" fn _start() {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
-    uart_init();
+    enable_uart();
+
     // Set ACT Led to Outout
     let _ = set_gpio_state(21, GPIOState::Output);
-
-    // Set GPIO Pins to UART
-    let _ = set_gpio_state(14, GPIOState::Alternative0);
-    let _ = set_gpio_state(15, GPIOState::Alternative0);
 
     print_current_el_str();
 
@@ -69,26 +68,26 @@ pub extern "C" fn main() -> ! {
 pub extern "C" fn kernel_main() -> ! {
     print_current_el_str();
 
-    sleep(500_000);
+    sleep_us(500_000);
 
-    // Set GPIO 21 to Input
-    enable_iqr_source(49); //21 is on the first GPIO bank
-    let _ = set_gpio_state(21, GPIOState::Input);
-    gpio_pull_up(21);
-    gpio_enable_low_detect(21, true);
+    // Set GPIO 26 to Input
+    enable_irq_source(nova::irq_interrupt::IRQState::GpioInt0); //26 is on the first GPIO bank
+    let _ = set_gpio_state(26, GPIOState::Input);
+    gpio_pull_up(26);
+    set_falling_edge_detect(26, true);
 
     loop {
         let _ = gpio_high(29);
 
-        sleep(500_000); // 0.5s
+        sleep_ms(500); // 0.5s
         let _ = gpio_low(29);
-        sleep(500_000); // 0.5s
+        sleep_ms(500); // 0.5s
         print_gpio_state();
     }
 }
 
 fn print_gpio_state() {
-    let state = gpio_get_state(21);
+    let state = gpio_get_state(26);
 
     let ascii_byte = b'0' + state;
     let data = [ascii_byte];
@@ -108,6 +107,13 @@ pub fn get_current_el() -> u64 {
         );
     }
     el >> 2
+}
+
+fn enable_uart() {
+    uart_init();
+    // Set GPIO Pins to UART
+    let _ = set_gpio_state(14, GPIOState::Alternative0);
+    let _ = set_gpio_state(15, GPIOState::Alternative0);
 }
 
 fn print_current_el_str() {
