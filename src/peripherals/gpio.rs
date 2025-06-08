@@ -90,30 +90,28 @@ pub fn gpio_pull_down(gpio: u8) {
 }
 
 fn gpio_pull_up_down(gpio: u8, val: u32) {
-    unsafe {
-        // Determine GPPUDCLK Register
-        let register_addr = GPPUDCLK_BASE + 4 * (gpio as u32 / 32);
-        let register_offset = gpio % 32;
+    // Determine GPPUDCLK Register
+    let register_addr = GPPUDCLK_BASE + 4 * (gpio as u32 / 32);
+    let register_offset = gpio % 32;
 
-        // 1. Write Pull up
-        mmio_write(GPPUD, val);
+    // 1. Write Pull up
+    mmio_write(GPPUD, val);
 
-        // 2. Delay 150 cycles
-        delay_nops(150);
+    // 2. Delay 150 cycles
+    delay_nops(150);
 
-        // 3. Write to clock
-        let new_val = 0b1 << register_offset;
-        mmio_write(register_addr, new_val);
+    // 3. Write to clock
+    let new_val = 0b1 << register_offset;
+    mmio_write(register_addr, new_val);
 
-        // 4. Delay 150 cycles
-        delay_nops(150);
+    // 4. Delay 150 cycles
+    delay_nops(150);
 
-        // 5. reset GPPUD
-        mmio_write(GPPUD, 0);
+    // 5. reset GPPUD
+    mmio_write(GPPUD, 0);
 
-        // 6. reset clock
-        mmio_write(register_addr, 0);
-    }
+    // 6. reset clock
+    mmio_write(register_addr, 0);
 }
 
 /// Get the current status if falling edge detection is set

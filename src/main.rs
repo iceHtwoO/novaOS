@@ -9,6 +9,7 @@ use core::{
 
 use nova::{
     irq_interrupt::enable_irq_source,
+    mailbox::read_soc_temp,
     peripherals::{
         gpio::{
             gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_falling_edge_detect,
@@ -77,6 +78,9 @@ pub extern "C" fn kernel_main() -> ! {
     set_falling_edge_detect(26, true);
 
     loop {
+        //let temp = read_soc_temp();
+        //u32_to_ascii(temp as u8);
+
         let _ = gpio_high(29);
 
         sleep_ms(500); // 0.5s
@@ -95,6 +99,15 @@ fn print_gpio_state() {
     let s = str::from_utf8(&data).unwrap();
     print(s);
     print("\r\n");
+}
+
+fn u32_to_ascii(val: u8) {
+    let ascii_byte = b'0' + val;
+    let data = [ascii_byte];
+
+    let s = str::from_utf8(&data).unwrap();
+    print(s);
+    print("C\r\n");
 }
 
 pub fn get_current_el() -> u64 {
