@@ -1,3 +1,5 @@
+use crate::{mmio_read, mmio_write};
+
 const BAUD: u32 = 115200;
 const UART_CLK: u32 = 48_000_000;
 
@@ -19,13 +21,11 @@ const UART0_LCRH_FEN: u32 = 1 << 4;
 /// Print `s` over UART
 pub fn print(s: &str) {
     for byte in s.bytes() {
-        unsafe {
-            while core::ptr::read_volatile(UART0_FR as *const u32) & UART0_FR_TXFF != 0 {}
-            core::ptr::write_volatile(UART0_DR as *mut u32, byte as u32);
-        }
+        while mmio_read(UART0_FR) & UART0_FR_TXFF != 0 {}
+        mmio_write(UART0_DR, byte as u32);
     }
     // wait till uart is not busy anymore
-    unsafe { while (core::ptr::read_volatile(UART0_FR as *const u32) >> 3) & 0b1 != 0 {} }
+    while (mmio_read(UART0_FR) >> 3) & 0b1 != 0 {}
 }
 
 /// Initialize UART peripheral
@@ -35,60 +35,52 @@ pub fn uart_init() {
     let ibrd = baud_div_times_64 / 64;
     let fbrd = baud_div_times_64 % 64;
 
-    unsafe {
-        uart_enable(false);
-        uart_fifo_enable(false);
+    uart_enable(false);
+    uart_fifo_enable(false);
 
-        core::ptr::write_volatile(UART0_IBRD as *mut u32, ibrd);
-        core::ptr::write_volatile(UART0_FBRD as *mut u32, fbrd);
+    mmio_write(UART0_IBRD, ibrd);
+    mmio_write(UART0_FBRD, fbrd);
 
-        uart_set_lcrh(0b11, true);
+    uart_set_lcrh(0b11, true);
 
-        // Enable transmit and uart
-        let mut cr = core::ptr::read_volatile(UART0_CR as *mut u32);
-        cr |= UART0_CR_UARTEN | UART0_CR_TXE;
+    // Enable transmit and uart
+    let mut cr = mmio_read(UART0_CR);
+    cr |= UART0_CR_UARTEN | UART0_CR_TXE;
 
-        core::ptr::write_volatile(UART0_CR as *mut u32, cr);
-    }
+    mmio_write(UART0_CR, cr);
 }
 
 /// Enable UARTEN
 fn uart_enable(enable: bool) {
-    unsafe {
-        let mut cr = core::ptr::read_volatile(UART0_CR as *mut u32);
+    let mut cr = mmio_read(UART0_CR);
 
-        if enable {
-            cr |= UART0_CR_UARTEN;
-        } else {
-            cr &= !UART0_CR_UARTEN;
-        }
-
-        core::ptr::write_volatile(UART0_CR as *mut u32, cr);
+    if enable {
+        cr |= UART0_CR_UARTEN;
+    } else {
+        cr &= !UART0_CR_UARTEN;
     }
+
+    mmio_write(UART0_CR, cr);
 }
 
 /// Enable UART FIFO
 fn uart_fifo_enable(enable: bool) {
-    unsafe {
-        let mut lcrh = core::ptr::read_volatile(UART0_LCRH as *mut u32);
+    let mut lcrh = mmio_read(UART0_LCRH);
 
-        if enable {
-            lcrh |= UART0_LCRH_FEN;
-        } else {
-            lcrh &= !UART0_LCRH_FEN;
-        }
-
-        core::ptr::write_volatile(UART0_LCRH as *mut u32, lcrh);
+    if enable {
+        lcrh |= UART0_LCRH_FEN;
+    } else {
+        lcrh &= !UART0_LCRH_FEN;
     }
+
+    mmio_write(UART0_LCRH, lcrh);
 }
 
 /// Set UART word length and set FIFO status
 fn uart_set_lcrh(wlen: u32, enable_fifo: bool) {
-    unsafe {
-        let mut value = (wlen & 0b11) << 5;
-        if enable_fifo {
-            value |= UART0_LCRH_FEN;
-        }
-        core::ptr::write_volatile(UART0_LCRH as *mut u32, value);
+    let mut value = (wlen & 0b11) << 5;
+    if enable_fifo {
+        value |= UART0_LCRH_FEN;
     }
+    mmio_write(UART0_LCRH, value);
 }

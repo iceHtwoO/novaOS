@@ -1,7 +1,9 @@
+use crate::mmio_read;
+
 const TIMER_CLO: u32 = 0x3F00_3004;
 
 fn read_clo() -> u32 {
-    unsafe { return core::ptr::read_volatile(TIMER_CLO as *const u32) }
+    return mmio_read(TIMER_CLO);
 }
 
 /// Sleep for `us` microseconds

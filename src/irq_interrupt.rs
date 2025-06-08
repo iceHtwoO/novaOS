@@ -1,10 +1,9 @@
 use core::{
     arch::asm,
-    ptr::{read_volatile, write_volatile},
     sync::atomic::{compiler_fence, Ordering},
 };
 
-use crate::peripherals::uart::print;
+use crate::{mmio_read, mmio_write, peripherals::uart::print};
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
 const IRQ_PENDING_BASE: u32 = INTERRUPT_BASE + 0x204;
@@ -57,7 +56,7 @@ pub fn read_gpio_event_detect_status(id: u32) -> bool {
     let register = GPEDS_BASE + (id / 32) * 4;
     let register_offset = id % 32;
 
-    let val = unsafe { read_volatile(register as *const u32) >> register_offset };
+    let val = mmio_read(register) >> register_offset;
     (val & 0b1) != 0
 }
 
@@ -66,7 +65,7 @@ pub fn reset_gpio_event_detect_status(id: u32) {
     let register = GPEDS_BASE + (id / 32) * 4;
     let register_offset = id % 32;
 
-    unsafe { write_volatile(register as *mut u32, 0b1 << register_offset) }
+    mmio_write(register, 0b1 << register_offset);
     compiler_fence(Ordering::SeqCst);
 }
 
@@ -75,12 +74,10 @@ pub fn enable_irq_source(state: IRQState) {
     let nr = state as u32;
     let register = ENABLE_IRQ_BASE + 4 * (nr / 32);
     let register_offset = nr % 32;
-    unsafe {
-        let current = read_volatile(register as *const u32);
-        let mask = 0b1 << register_offset;
-        let new_val = current | mask;
-        write_volatile(register as *mut u32, new_val);
-    }
+    let current = mmio_read(register);
+    let mask = 0b1 << register_offset;
+    let new_val = current | mask;
+    mmio_write(register, new_val);
 }
 
 /// Disable IRQ Source
@@ -88,12 +85,10 @@ pub fn disable_irq_source(state: IRQState) {
     let nr = state as u32;
     let register = DISABLE_IRQ_BASE + 4 * (nr / 32);
     let register_offset = nr % 32;
-    unsafe {
-        let current = read_volatile(register as *const u32);
-        let mask = 0b1 << register_offset;
-        let new_val = current | mask;
-        write_volatile(register as *mut u32, new_val);
-    }
+    let current = mmio_read(register);
+    let mask = 0b1 << register_offset;
+    let new_val = current | mask;
+    mmio_write(register, new_val);
 }
 
 /// Read current IRQ Source status
@@ -101,7 +96,7 @@ pub fn read_irq_source_status(state: IRQState) -> u32 {
     let nr = state as u32;
     let register = ENABLE_IRQ_BASE + 4 * (nr / 32);
     let register_offset = nr % 32;
-    unsafe { (read_volatile(register as *const u32) >> register_offset) & 0b1 }
+    (mmio_read(register) >> register_offset) & 0b1
 }
 
 /// Status if a IRQ Source is enabled
@@ -109,7 +104,7 @@ pub fn read_irq_pending(state: IRQState) -> bool {
     let nr = state as u32;
     let register = IRQ_PENDING_BASE + 4 * (nr / 32);
     let register_offset = nr % 32;
-    (unsafe { (read_volatile(register as *const u32) >> register_offset) & 0b1 }) != 0
+    ((mmio_read(register) >> register_offset) & 0b1) != 0
 }
 
 /// Clears the IRQ DAIF Mask
