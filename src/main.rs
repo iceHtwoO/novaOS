@@ -12,7 +12,7 @@ use nova::{
     peripherals::{
         gpio::{
             gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_falling_edge_detect,
-            set_gpio_state, GPIOState,
+            set_gpio_function, GPIOFunction,
         },
         uart::{print, uart_init},
     },
@@ -49,7 +49,7 @@ pub extern "C" fn main() -> ! {
     enable_uart();
 
     // Set ACT Led to Outout
-    let _ = set_gpio_state(21, GPIOState::Output);
+    let _ = set_gpio_function(21, GPIOFunction::Output);
 
     print_current_el_str();
 
@@ -72,7 +72,7 @@ pub extern "C" fn kernel_main() -> ! {
 
     // Set GPIO 26 to Input
     enable_irq_source(nova::irq_interrupt::IRQState::GpioInt0); //26 is on the first GPIO bank
-    let _ = set_gpio_state(26, GPIOState::Input);
+    let _ = set_gpio_function(26, GPIOFunction::Input);
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
@@ -112,8 +112,8 @@ pub fn get_current_el() -> u64 {
 fn enable_uart() {
     uart_init();
     // Set GPIO Pins to UART
-    let _ = set_gpio_state(14, GPIOState::Alternative0);
-    let _ = set_gpio_state(15, GPIOState::Alternative0);
+    let _ = set_gpio_function(14, GPIOFunction::Alternative0);
+    let _ = set_gpio_function(15, GPIOFunction::Alternative0);
 }
 
 fn print_current_el_str() {
