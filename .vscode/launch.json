@@ -1,5 +1,12 @@
 {
   "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Run QEMU + Attach LLDB",
+      "configurations": ["Attach LLDB"],
+      "preLaunchTask": "Run QEMU"
+    }
+  ],
   "configurations": [
     {
       "name": "Attach to QEMU (AArch64)",
@@ -12,19 +19,29 @@
       "stopAtEntry": true,
       "externalConsole": false,
       "MIMode": "gdb",
-"setupCommands": [
-  {
-    "description": "Enable pretty-printing for gdb",
-    "text": "-enable-pretty-printing",
-    "ignoreFailures": true
-  },
-  {
-    "description": "Show assembly on stop",
-    "text": "layout asm",
-    "ignoreFailures": true
-  }
-],
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "Show assembly on stop",
+          "text": "set disassemble-next-line on",
+          "ignoreFailures": true
+        }
+      ],
       "preLaunchTask": "Run QEMU"
+    },
+
+    {
+      "name": "Attach LLDB",
+      "type": "lldb",
+      "request": "attach",
+      "debugServer": 1234,
+      "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
+      "stopOnEntry": true,
+      "processCreateCommands": ["gdb-remote localhost:1234"]
     }
   ]
 }

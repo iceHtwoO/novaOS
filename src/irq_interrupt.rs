@@ -3,7 +3,10 @@ use core::{
     sync::atomic::{compiler_fence, Ordering},
 };
 
-use crate::{mmio_read, mmio_write, peripherals::uart::print};
+use crate::{
+    mmio_read, mmio_write,
+    peripherals::{gpio::blink_gpio, uart::print},
+};
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
 const IRQ_PENDING_BASE: u32 = INTERRUPT_BASE + 0x204;
@@ -35,7 +38,18 @@ unsafe extern "C" fn irq_handler() {
     handle_gpio_interrupt();
 }
 
+#[no_mangle]
+unsafe extern "C" fn synchronous_interrupt() {
+    loop {
+        let el: u64;
+        asm!("mrs x5, FAR_EL1");
+        blink_gpio(29, 100);
+        print("Sync Exception \r\n");
+    }
+}
+
 fn handle_gpio_interrupt() {
+    print("Interrupt\r\n");
     for i in 0..=53u32 {
         let val = read_gpio_event_detect_status(i);
 

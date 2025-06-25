@@ -1,7 +1,7 @@
 use core::result::Result;
 use core::result::Result::Ok;
 
-use crate::timer::delay_nops;
+use crate::timer::{delay_nops, sleep_ms};
 use crate::{mmio_read, mmio_write};
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;
@@ -163,4 +163,12 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
     };
 
     mmio_write(register_addr, new_val);
+}
+
+pub fn blink_gpio(gpio: u8, duration_ms: u32) {
+    let _ = gpio_high(gpio);
+
+    sleep_ms(duration_ms);
+    let _ = gpio_low(gpio);
+    sleep_ms(duration_ms);
 }

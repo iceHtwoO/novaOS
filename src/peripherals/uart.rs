@@ -1,3 +1,5 @@
+use core::{arch::asm, fmt};
+
 use crate::{mmio_read, mmio_write};
 
 const BAUD: u32 = 115200;
@@ -21,11 +23,34 @@ const UART0_LCRH_FEN: u32 = 1 << 4;
 /// Print `s` over UART
 pub fn print(s: &str) {
     for byte in s.bytes() {
-        while mmio_read(UART0_FR) & UART0_FR_TXFF != 0 {}
+        while (mmio_read(UART0_FR) & UART0_FR_TXFF) != 0 {
+            unsafe { asm!("nop") }
+        }
         mmio_write(UART0_DR, byte as u32);
     }
     // wait till uart is not busy anymore
-    while (mmio_read(UART0_FR) >> 3) & 0b1 != 0 {}
+    while ((mmio_read(UART0_FR) >> 3) & 0b1) != 0 {}
+}
+
+pub fn print_u32(mut val: u32) {
+    let mut values = [0u32; 10];
+    for c in &mut values {
+        if val == 0 {
+            break;
+        }
+
+        *c = val % 10;
+        val /= 10;
+    }
+
+    for c in values.iter().rev() {
+        let ascii_byte = b'0' + *c as u8;
+        let data = [ascii_byte];
+
+        let s = str::from_utf8(&data).unwrap();
+        print(s);
+    }
+    print("\r\n");
 }
 
 /// Initialize UART peripheral

@@ -10,4 +10,5 @@ qemu-system-aarch64 \
   -serial stdio \
   -sd ../sd.img \
   -display none \
-  -kernel ../target/aarch64-unknown-none/debug/kernel8.img
+  -kernel ../target/aarch64-unknown-none/debug/kernel8.img \
+  -s -S

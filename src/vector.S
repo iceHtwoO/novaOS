@@ -14,8 +14,8 @@ vector_table:
     ventry .
     ventry .
 
-    ventry .
-    ventry irq_handler     // IRQ(Interrupt Request) 0x280
+    ventry synchronous_interrupt      // Synchronous Exception  0x200
+    ventry irq_handler                // IRQ(Interrupt Request) 0x280
     ventry .
     ventry .
 
@@ -43,6 +43,11 @@ el2_to_el1:
     // Set VBAR_EL1 to vector table
     adr x0, vector_table
     msr VBAR_EL1, x0
+
+    // Disable MMU
+    mrs x0, sctlr_el1
+    bic x0, x0, #1
+    msr sctlr_el1, x0
 
     isb
 
