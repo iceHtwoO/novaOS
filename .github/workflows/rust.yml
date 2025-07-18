@@ -14,15 +14,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Install rustfmt for nightly
+        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
       - name: Run format check
         run: cargo fmt --check
       - name: Run lint
         run: cargo clippy
-  build:
 
+  build:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+      - uses: actions/checkout@v4
+      - name: Install rustfmt for nightly
+        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
+      - name: Build
+        run: cargo build --verbose
