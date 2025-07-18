@@ -1,5 +1,3 @@
-use core::ptr::read_volatile;
-
 use crate::{mmio_read, mmio_write, peripherals::uart::print};
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
