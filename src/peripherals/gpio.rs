@@ -1,7 +1,7 @@
 use core::result::Result;
 use core::result::Result::Ok;
 
-use crate::timer::delay_nops;
+use crate::timer::{delay_nops, sleep_ms};
 use crate::{mmio_read, mmio_write};
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;
@@ -12,6 +12,11 @@ const GPPUD: u32 = 0x3F20_0094;
 const GPPUDCLK_BASE: u32 = 0x3F20_0098;
 const GPREN_BASE: u32 = 0x3F20_004C;
 const GPFEN_BASE: u32 = 0x3F20_0058;
+
+#[repr(u8)]
+pub enum SpecificGpio {
+    OnboardLed = 29,
+}
 
 #[repr(u32)]
 pub enum GPIOFunction {
@@ -90,30 +95,28 @@ pub fn gpio_pull_down(gpio: u8) {
 }
 
 fn gpio_pull_up_down(gpio: u8, val: u32) {
-    unsafe {
-        // Determine GPPUDCLK Register
-        let register_addr = GPPUDCLK_BASE + 4 * (gpio as u32 / 32);
-        let register_offset = gpio % 32;
+    // Determine GPPUDCLK Register
+    let register_addr = GPPUDCLK_BASE + 4 * (gpio as u32 / 32);
+    let register_offset = gpio % 32;
 
-        // 1. Write Pull up
-        mmio_write(GPPUD, val);
+    // 1. Write Pull up
+    mmio_write(GPPUD, val);
 
-        // 2. Delay 150 cycles
-        delay_nops(150);
+    // 2. Delay 150 cycles
+    delay_nops(150);
 
-        // 3. Write to clock
-        let new_val = 0b1 << register_offset;
-        mmio_write(register_addr, new_val);
+    // 3. Write to clock
+    let new_val = 0b1 << register_offset;
+    mmio_write(register_addr, new_val);
 
-        // 4. Delay 150 cycles
-        delay_nops(150);
+    // 4. Delay 150 cycles
+    delay_nops(150);
 
-        // 5. reset GPPUD
-        mmio_write(GPPUD, 0);
+    // 5. reset GPPUD
+    mmio_write(GPPUD, 0);
 
-        // 6. reset clock
-        mmio_write(register_addr, 0);
-    }
+    // 6. reset clock
+    mmio_write(register_addr, 0);
 }
 
 /// Get the current status if falling edge detection is set
@@ -165,4 +168,12 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
     };
 
     mmio_write(register_addr, new_val);
+}
+
+pub fn blink_gpio(gpio: u8, duration_ms: u32) {
+    let _ = gpio_high(gpio);
+
+    sleep_ms(duration_ms);
+    let _ = gpio_low(gpio);
+    sleep_ms(duration_ms);
 }

@@ -4,6 +4,7 @@ use core::ptr::{read_volatile, write_volatile};
 
 pub mod peripherals;
 
+pub mod configuration;
 pub mod irq_interrupt;
 pub mod mailbox;
 pub mod timer;

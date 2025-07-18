@@ -14,7 +14,7 @@
     {
       "label": "Run QEMU",
       "type": "shell",
-      "command": "qemu-system-aarch64 -M raspi3b -cpu cortex-a53 -serial stdio -sd sd.img -display none -kernel ${workspaceFolder}/target/aarch64-unknown-none/debug/kernel8.img -S -s",
+      "command": "qemu-system-aarch64 -M raspi3b -cpu cortex-a53 -serial stdio -sd sd.img -display none -kernel ${workspaceFolder}/target/aarch64-unknown-none/debug/kernel8.img -S -s -m 1024",
       "isBackground": true,
       "dependsOn": ["Build"]
     }

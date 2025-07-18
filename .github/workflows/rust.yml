@@ -3,7 +3,7 @@ name: Rust
 on:
   push:
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install rustfmt for nightly
-        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
+        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt clippy
       - name: Run format check
         run: cargo fmt --check
       - name: Run lint
@@ -27,6 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install rustfmt for nightly
-        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
+        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt clippy
       - name: Build
         run: cargo build --verbose

@@ -5,24 +5,28 @@
 use core::{
     arch::{asm, global_asm},
     panic::PanicInfo,
+    ptr::write_volatile,
 };
 
 use nova::{
     irq_interrupt::enable_irq_source,
+    mailbox::read_soc_temp,
     peripherals::{
         gpio::{
-            gpio_get_state, gpio_high, gpio_low, gpio_pull_up, set_falling_edge_detect,
-            set_gpio_function, GPIOFunction,
+            blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
+            SpecificGpio,
         },
-        uart::{print, uart_init},
+        uart::{print, print_u32, uart_init},
     },
-    timer::{delay_nops, sleep_ms, sleep_us},
+    timer::{delay_nops, sleep_us},
 };
 
 global_asm!(include_str!("vector.S"));
 
 extern "C" {
     fn el2_to_el1();
+    static mut __bss_start: u32;
+    static mut __bss_end: u32;
 }
 
 #[panic_handler]
@@ -46,6 +50,9 @@ pub unsafe extern "C" fn _start() {
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
+    unsafe {
+        zero_bss();
+    }
     enable_uart();
 
     // Set ACT Led to Outout
@@ -58,10 +65,19 @@ pub extern "C" fn main() -> ! {
     print("Hello World!\r\n");
 
     unsafe {
+        asm!("mrs x0, SCTLR_EL1");
         el2_to_el1();
     }
 
     loop {}
+}
+
+unsafe fn zero_bss() {
+    let mut bss: *mut u32 = &raw mut __bss_start as *mut u32;
+    while bss < &raw mut __bss_end as *mut u32 {
+        write_volatile(bss, 0);
+        bss = bss.add(1);
+    }
 }
 
 #[no_mangle]
@@ -77,24 +93,11 @@ pub extern "C" fn kernel_main() -> ! {
     set_falling_edge_detect(26, true);
 
     loop {
-        let _ = gpio_high(29);
+        let temp = read_soc_temp();
+        print_u32(temp);
 
-        sleep_ms(500); // 0.5s
-        let _ = gpio_low(29);
-        sleep_ms(500); // 0.5s
-        print_gpio_state();
+        blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
-}
-
-fn print_gpio_state() {
-    let state = gpio_get_state(26);
-
-    let ascii_byte = b'0' + state;
-    let data = [ascii_byte];
-
-    let s = str::from_utf8(&data).unwrap();
-    print(s);
-    print("\r\n");
 }
 
 pub fn get_current_el() -> u64 {
