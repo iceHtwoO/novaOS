@@ -13,6 +13,11 @@ const GPPUDCLK_BASE: u32 = 0x3F20_0098;
 const GPREN_BASE: u32 = 0x3F20_004C;
 const GPFEN_BASE: u32 = 0x3F20_0058;
 
+#[repr(u8)]
+pub enum SpecificGpio {
+    OnboardLed = 29,
+}
+
 #[repr(u32)]
 pub enum GPIOFunction {
     Input = 0b000,

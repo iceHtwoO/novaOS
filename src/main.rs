@@ -14,6 +14,7 @@ use nova::{
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
+            SpecificGpio,
         },
         uart::{print, print_u32, uart_init},
     },
@@ -81,7 +82,6 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
-    print("AAA\r\n");
     print_current_el_str();
 
     sleep_us(500_000);
@@ -96,7 +96,7 @@ pub extern "C" fn kernel_main() -> ! {
         let temp = read_soc_temp();
         print_u32(temp);
 
-        blink_gpio(29, 500);
+        blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
 }
 

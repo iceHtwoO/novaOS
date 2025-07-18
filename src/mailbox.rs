@@ -1,9 +1,6 @@
 use core::ptr::read_volatile;
 
-use crate::{
-    mmio_read, mmio_write,
-    peripherals::uart::{print, print_u32},
-};
+use crate::{mmio_read, mmio_write, peripherals::uart::print};
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
 
@@ -17,12 +14,6 @@ const MBOX_WRITE: u32 = MBOX_BASE + 0x20;
 // Status
 const MAIL_FULL: u32 = 0x80000000;
 const MAIL_EMPTY: u32 = 0x40000000;
-
-#[repr(C, align(16))]
-struct MailboxBuffer([u32; 36]);
-
-#[no_mangle]
-static mut MBOX: MailboxBuffer = MailboxBuffer([0; 36]);
 
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty
@@ -45,30 +36,25 @@ pub fn write_mailbox(channel: u32, data: u32) {
 }
 
 pub fn read_soc_temp() -> u32 {
-    unsafe {
-        // MBOX.0[0] = 7 * 4; // Total size in bytes
-        // MBOX.0[1] = 0; // Request
-        // MBOX.0[2] = 0x00010002; // Tag
-        // MBOX.0[3] = 4; // Maximum buffer lenb
-        // MBOX.0[4] = 0; // Request length
-        // MBOX.0[5] = 0; // Value Buffer
-        // MBOX.0[6] = 0; // End
-        // core::arch::asm!("dsb sy"); // Ensure write reaches RAM
-        // core::arch::asm!("dmb sy"); // Memory barrier
+    let mut mailbox = [0; 36];
+    mailbox[0] = 8 * 4; // Total size in bytes
+    mailbox[1] = 0; // Request
+    mailbox[2] = 0x00030006; // Tag
+    mailbox[3] = 8; // Maximum buffer len
+    mailbox[4] = 4; // Request length
+    mailbox[5] = 0; // Value Buffer
+    mailbox[6] = 0; // Value Buffer
+    mailbox[7] = 0; // End
 
-        print("Reading address\r\n");
-        //let addr = core::ptr::addr_of!(MBOX.0[0]);
+    let addr = core::ptr::addr_of!(mailbox[0]) as u32;
 
-        print("Write address\r\n");
+    write_mailbox(8, addr);
 
-        // write_mailbox(8, addr);
+    let _ = read_mailbox(8);
 
-        let _ = read_mailbox(8);
-
-        if MBOX.0[1] == 0 {
-            print("Failed\r\n");
-        }
-        let raw_temp = MBOX.0[5];
-        raw_temp
+    if mailbox[1] == 0 {
+        print("Failed\r\n");
     }
+    let raw_temp = mailbox[6] / 1000;
+    raw_temp
 }

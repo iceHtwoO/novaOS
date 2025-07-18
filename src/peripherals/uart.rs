@@ -1,4 +1,4 @@
-use core::{arch::asm, fmt};
+use core::arch::asm;
 
 use crate::{mmio_read, mmio_write};
 
@@ -33,17 +33,24 @@ pub fn print(s: &str) {
 }
 
 pub fn print_u32(mut val: u32) {
+    let mut last_valid = 0;
     let mut values = [0u32; 10];
-    for c in &mut values {
+    for (i, c) in (&mut values).iter_mut().enumerate() {
         if val == 0 {
             break;
         }
 
         *c = val % 10;
         val /= 10;
+        if *c != 0 {
+            last_valid = i;
+        }
     }
 
-    for c in values.iter().rev() {
+    for (i, c) in values.iter().enumerate().rev() {
+        if i > last_valid {
+            continue;
+        }
         let ascii_byte = b'0' + *c as u8;
         let data = [ascii_byte];
 

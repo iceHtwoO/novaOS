@@ -27,10 +27,9 @@ SECTIONS {
         KEEP(*(.vector_table))
     }
 
-    .stack 0x8008000 : ALIGN(16)
+    .stack 0x8018000 : ALIGN(16)
     {
     __stack_start = .;
-    .+=0x10000;
     __stack_end = .;
     }
 
