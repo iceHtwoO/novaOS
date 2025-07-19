@@ -57,7 +57,6 @@ pub fn print_u32(mut val: u32) {
         let s = str::from_utf8(&data).unwrap();
         print(s);
     }
-    print("\r\n");
 }
 
 /// Initialize UART peripheral

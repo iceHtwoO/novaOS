@@ -9,6 +9,7 @@ use core::{
 };
 
 use nova::{
+    framebuffer::{init_fb, print_display_resolution},
     irq_interrupt::enable_irq_source,
     mailbox::read_soc_temp,
     peripherals::{
@@ -92,9 +93,13 @@ pub extern "C" fn kernel_main() -> ! {
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
+    print_display_resolution();
+    init_fb();
+
     loop {
         let temp = read_soc_temp();
         print_u32(temp);
+        print("\r\n");
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }

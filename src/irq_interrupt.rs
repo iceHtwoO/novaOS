@@ -9,7 +9,7 @@ use crate::{
         gpio::{blink_gpio, SpecificGpio},
         uart::print,
     },
-    timer::{sleep_ms, sleep_s},
+    timer::sleep_s,
 };
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
