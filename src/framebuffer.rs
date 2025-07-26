@@ -103,7 +103,9 @@ impl FrameBuffer {
         }
     }
 
-    /*Bresenham's line algorithm */
+    /*Bresenham's line algorithm
+    TODO: check if its possible to optimize y1==y2 case
+    */
     pub fn draw_line(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
         if x1 == x2 {
             for y in y1..=y2 {
@@ -111,6 +113,44 @@ impl FrameBuffer {
             }
             return;
         }
+
+        if (y2 as i32 - y1 as i32).abs() < (x2 as i32 - x1 as i32).abs() {
+            if x1 > x2 {
+                self.plot_line_low(x2, y2, x1, y1);
+            } else {
+                self.plot_line_low(x1, y1, x2, y2);
+            }
+        } else {
+            if y1 > y2 {
+                self.plot_line_high(x2, y2, x1, y1);
+            } else {
+                self.plot_line_high(x1, y1, x2, y2);
+            }
+        }
+    }
+
+    pub fn draw_square(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+        self.draw_line(x1, y1, x2, y1);
+        self.draw_line(x1, y2, x2, y2);
+        self.draw_line(x1, y1, x1, y2);
+        self.draw_line(x2, y1, x2, y2);
+    }
+
+    pub fn draw_square_fill(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+        let mut y_start = y1;
+        let mut y_end = y2;
+
+        if y2 < y1 {
+            y_start = y2;
+            y_end = y1;
+        }
+
+        for y in y_start..=y_end {
+            self.draw_line(x1, y, x2, y);
+        }
+    }
+
+    fn plot_line_low(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
         let dx = x2 as i32 - x1 as i32;
         let mut dy = y2 as i32 - y1 as i32;
         let mut yi = 1;
@@ -126,10 +166,33 @@ impl FrameBuffer {
         for x in x1..=x2 {
             self.draw_pixel(x, y as u32);
             if d > 0 {
-                y = y + yi;
+                y += yi;
                 d += 2 * (dy - dx);
             } else {
                 d += 2 * dy;
+            }
+        }
+    }
+    fn plot_line_high(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+        let mut dx = x2 as i32 - x1 as i32;
+        let dy = y2 as i32 - y1 as i32;
+        let mut xi: i32 = 1;
+
+        let mut d = 2 * dy - dx;
+        let mut x = x1 as i32;
+
+        if dx < 0 {
+            xi = -1;
+            dx = -dx;
+        }
+
+        for y in y1..=y2 {
+            self.draw_pixel(x as u32, y);
+            if d > 0 {
+                x += xi;
+                d += 2 * (dx - dy);
+            } else {
+                d += 2 * dx;
             }
         }
     }

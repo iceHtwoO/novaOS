@@ -10,6 +10,7 @@ NovaOS is a expository project where I build a kernel from scratch for a Raspber
 - UART ✓
 - GPIOs ✓
 - GPIO Interrupts ✓
-- Frame Buffer
+- Communicate with peripherals via mailboxes ✓
+- Frame Buffer ✓
 - MMU
 - Basic Terminal over UART

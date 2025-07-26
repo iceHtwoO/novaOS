@@ -98,19 +98,11 @@ pub extern "C" fn kernel_main() -> ! {
     print_display_resolution();
 
     fb.draw_line(10, 10, 1000, 10);
-    fb.draw_line(10, 10, 1000, 200);
-    fb.draw_line(10, 10, 1000, 300);
-    fb.draw_line(10, 10, 1000, 400);
-    fb.draw_line(10, 10, 1000, 500);
-    fb.draw_line(10, 10, 1000, 600);
-    fb.draw_line(10, 10, 1000, 700);
-    fb.draw_line(10, 10, 1000, 800);
-    fb.draw_line(10, 10, 1000, 900);
-    fb.draw_line(10, 10, 1000, 1000);
-    fb.draw_line(10, 10, 100, 1000);
-
-    fb.draw_line(1800, 10, 1000, 900);
-    fb.draw_line(1800, 500, 1000, 100);
+    fb.draw_line(1000, 20, 10, 20);
+    fb.draw_square(500, 500, 600, 700);
+    fb.draw_square_fill(800, 800, 900, 900);
+    fb.draw_square_fill(1000, 800, 1200, 700);
+    fb.draw_square_fill(900, 100, 800, 150);
 
     loop {
         let temp = read_soc_temp();
