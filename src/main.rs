@@ -9,7 +9,7 @@ use core::{
 };
 
 use nova::{
-    framebuffer::{init_fb, print_display_resolution},
+    framebuffer::{print_display_resolution, FrameBuffer},
     irq_interrupt::enable_irq_source,
     mailbox::read_soc_temp,
     peripherals::{
@@ -94,7 +94,23 @@ pub extern "C" fn kernel_main() -> ! {
     set_falling_edge_detect(26, true);
 
     print_display_resolution();
-    init_fb();
+    let fb = FrameBuffer::new();
+    print_display_resolution();
+
+    fb.draw_line(10, 10, 1000, 10);
+    fb.draw_line(10, 10, 1000, 200);
+    fb.draw_line(10, 10, 1000, 300);
+    fb.draw_line(10, 10, 1000, 400);
+    fb.draw_line(10, 10, 1000, 500);
+    fb.draw_line(10, 10, 1000, 600);
+    fb.draw_line(10, 10, 1000, 700);
+    fb.draw_line(10, 10, 1000, 800);
+    fb.draw_line(10, 10, 1000, 900);
+    fb.draw_line(10, 10, 1000, 1000);
+    fb.draw_line(10, 10, 100, 1000);
+
+    fb.draw_line(1800, 10, 1000, 900);
+    fb.draw_line(1800, 500, 1000, 100);
 
     loop {
         let temp = read_soc_temp();
