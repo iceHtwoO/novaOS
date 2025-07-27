@@ -1,5 +1,9 @@
 use core::ptr::write_volatile;
 
+mod bitmaps;
+
+use bitmaps::BASIC_LEGACY;
+
 use crate::{
     mailbox::{read_mailbox, write_mailbox},
     peripherals::uart::{print, print_u32, print_u32_hex},
@@ -193,6 +197,22 @@ impl FrameBuffer {
                 d += 2 * (dx - dy);
             } else {
                 d += 2 * dx;
+            }
+        }
+    }
+
+    pub fn draw_letter(&self, x: u32, y: u32, scale: u32) {
+        for (y_offset, row) in (&BASIC_LEGACY[0x70]).iter().enumerate() {
+            for bit in 0..8 {
+                match row & (1 << bit) {
+                    0 => {}
+                    _ => self.draw_square_fill(
+                        x + (bit * scale),
+                        y + (y_offset as u32 * scale),
+                        x + ((bit + 1) * scale),
+                        y + ((y_offset + 1) as u32 * scale),
+                    ),
+                }
             }
         }
     }
