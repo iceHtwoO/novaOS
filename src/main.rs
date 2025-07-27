@@ -12,6 +12,7 @@ use nova::{
     framebuffer::{print_display_resolution, FrameBuffer},
     irq_interrupt::enable_irq_source,
     mailbox::read_soc_temp,
+    math::polar_to_cartesian,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -97,8 +98,11 @@ pub extern "C" fn kernel_main() -> ! {
     let fb = FrameBuffer::new();
     print_display_resolution();
 
-    fb.draw_line(10, 10, 1000, 10);
-    fb.draw_line(1000, 20, 10, 20);
+    for a in 0..360 {
+        let (x, y) = polar_to_cartesian(100.0, a as f32);
+        fb.draw_line(150, 150, (150.0 + x) as u32, (150.0 + y) as u32);
+    }
+
     fb.draw_square(500, 500, 600, 700);
     fb.draw_square_fill(800, 800, 900, 900);
     fb.draw_square_fill(1000, 800, 1200, 700);
