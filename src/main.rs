@@ -107,7 +107,7 @@ pub extern "C" fn kernel_main() -> ! {
     fb.draw_square_fill(800, 800, 900, 900);
     fb.draw_square_fill(1000, 800, 1200, 700);
     fb.draw_square_fill(900, 100, 800, 150);
-    fb.draw_letter(500, 5, 4);
+    fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3);
 
     loop {
         let temp = read_soc_temp();

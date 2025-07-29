@@ -201,8 +201,25 @@ impl FrameBuffer {
         }
     }
 
-    pub fn draw_letter(&self, x: u32, y: u32, scale: u32) {
-        for (y_offset, row) in (&BASIC_LEGACY[0x70]).iter().enumerate() {
+    //TODO: Scale in pixels
+    pub fn draw_string(&self, string: &str, x: u32, mut y: u32, scale: u32) {
+        let mut offset = 0;
+        for c in string.bytes() {
+            match c {
+                b'\n' => {
+                    y += 8 * scale;
+                    offset = 0;
+                }
+                _ => {
+                    self.draw_ascii(x + (offset as u32 * 8 * scale), y, c as usize, scale);
+                    offset += 1
+                }
+            }
+        }
+    }
+
+    fn draw_ascii(&self, x: u32, y: u32, char: usize, scale: u32) {
+        for (y_offset, row) in (&BASIC_LEGACY[char]).iter().enumerate() {
             for bit in 0..8 {
                 match row & (1 << bit) {
                     0 => {}
