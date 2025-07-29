@@ -28,6 +28,12 @@ pub struct FrameBuffer {
     size: u32, //Bytes
 }
 
+pub const RED: u32 = 0x00FF0000;
+pub const GREEN: u32 = 0x0000FF00;
+pub const BLUE: u32 = 0x000000FF;
+pub const ORANGE: u32 = 0x00FFA500;
+pub const YELLOW: u32 = 0x00FFFF00;
+
 impl FrameBuffer {
     pub fn new() -> Self {
         let mut mailbox = Mailbox([0; 36]);
@@ -54,7 +60,7 @@ impl FrameBuffer {
         mailbox.0[16] = SET_PIXEL_ORDER;
         mailbox.0[17] = 4;
         mailbox.0[18] = 4;
-        mailbox.0[19] = 0x1; // RGB
+        mailbox.0[19] = 0x0; // RGB
 
         mailbox.0[20] = SET_FB_OFFSET;
         mailbox.0[21] = 8;
@@ -100,47 +106,47 @@ impl FrameBuffer {
         }
     }
 
-    pub fn draw_pixel(&self, x: u32, y: u32) {
+    pub fn draw_pixel(&self, x: u32, y: u32, color: u32) {
         let offset = x + y * self.pitch;
         unsafe {
-            write_volatile(self.start_addr.add(offset as usize), 0x00AAFFFF);
+            write_volatile(self.start_addr.add(offset as usize), color);
         }
     }
 
     /*Bresenham's line algorithm
     TODO: check if its possible to optimize y1==y2 case
     */
-    pub fn draw_line(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+    pub fn draw_line(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         if x1 == x2 {
             for y in y1..=y2 {
-                self.draw_pixel(x1, y);
+                self.draw_pixel(x1, y, color);
             }
             return;
         }
 
         if (y2 as i32 - y1 as i32).abs() < (x2 as i32 - x1 as i32).abs() {
             if x1 > x2 {
-                self.plot_line_low(x2, y2, x1, y1);
+                self.plot_line_low(x2, y2, x1, y1, color);
             } else {
-                self.plot_line_low(x1, y1, x2, y2);
+                self.plot_line_low(x1, y1, x2, y2, color);
             }
         } else {
             if y1 > y2 {
-                self.plot_line_high(x2, y2, x1, y1);
+                self.plot_line_high(x2, y2, x1, y1, color);
             } else {
-                self.plot_line_high(x1, y1, x2, y2);
+                self.plot_line_high(x1, y1, x2, y2, color);
             }
         }
     }
 
-    pub fn draw_square(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
-        self.draw_line(x1, y1, x2, y1);
-        self.draw_line(x1, y2, x2, y2);
-        self.draw_line(x1, y1, x1, y2);
-        self.draw_line(x2, y1, x2, y2);
+    pub fn draw_square(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
+        self.draw_line(x1, y1, x2, y1, color);
+        self.draw_line(x1, y2, x2, y2, color);
+        self.draw_line(x1, y1, x1, y2, color);
+        self.draw_line(x2, y1, x2, y2, color);
     }
 
-    pub fn draw_square_fill(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+    pub fn draw_square_fill(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         let mut y_start = y1;
         let mut y_end = y2;
 
@@ -150,11 +156,11 @@ impl FrameBuffer {
         }
 
         for y in y_start..=y_end {
-            self.draw_line(x1, y, x2, y);
+            self.draw_line(x1, y, x2, y, color);
         }
     }
 
-    fn plot_line_low(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+    fn plot_line_low(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         let dx = x2 as i32 - x1 as i32;
         let mut dy = y2 as i32 - y1 as i32;
         let mut yi = 1;
@@ -168,7 +174,7 @@ impl FrameBuffer {
         }
 
         for x in x1..=x2 {
-            self.draw_pixel(x, y as u32);
+            self.draw_pixel(x, y as u32, color);
             if d > 0 {
                 y += yi;
                 d += 2 * (dy - dx);
@@ -177,7 +183,7 @@ impl FrameBuffer {
             }
         }
     }
-    fn plot_line_high(&self, x1: u32, y1: u32, x2: u32, y2: u32) {
+    fn plot_line_high(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         let mut dx = x2 as i32 - x1 as i32;
         let dy = y2 as i32 - y1 as i32;
         let mut xi: i32 = 1;
@@ -191,7 +197,7 @@ impl FrameBuffer {
         }
 
         for y in y1..=y2 {
-            self.draw_pixel(x as u32, y);
+            self.draw_pixel(x as u32, y, color);
             if d > 0 {
                 x += xi;
                 d += 2 * (dx - dy);
@@ -202,7 +208,7 @@ impl FrameBuffer {
     }
 
     //TODO: Scale in pixels
-    pub fn draw_string(&self, string: &str, x: u32, mut y: u32, scale: u32) {
+    pub fn draw_string(&self, string: &str, x: u32, mut y: u32, scale: u32, color: u32) {
         let mut offset = 0;
         for c in string.bytes() {
             match c {
@@ -211,14 +217,14 @@ impl FrameBuffer {
                     offset = 0;
                 }
                 _ => {
-                    self.draw_ascii(x + (offset as u32 * 8 * scale), y, c as usize, scale);
+                    self.draw_ascii(x + (offset as u32 * 8 * scale), y, c as usize, scale, color);
                     offset += 1
                 }
             }
         }
     }
 
-    fn draw_ascii(&self, x: u32, y: u32, char: usize, scale: u32) {
+    fn draw_ascii(&self, x: u32, y: u32, char: usize, scale: u32, color: u32) {
         for (y_offset, row) in (&BASIC_LEGACY[char]).iter().enumerate() {
             for bit in 0..8 {
                 match row & (1 << bit) {
@@ -228,9 +234,17 @@ impl FrameBuffer {
                         y + (y_offset as u32 * scale),
                         x + ((bit + 1) * scale),
                         y + ((y_offset + 1) as u32 * scale),
+                        color,
                     ),
                 }
             }
+        }
+    }
+
+    pub fn draw_function(&self, f: fn(u32) -> f64, x_offset: i32, y_offset: i32, color: u32) {
+        for x in 0..self.pitch as i32 {
+            let y = f(x as u32);
+            self.draw_pixel((x + x_offset) as u32, (y + y_offset as f64) as u32, color);
         }
     }
 }
