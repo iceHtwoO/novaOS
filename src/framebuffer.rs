@@ -92,9 +92,6 @@ impl FrameBuffer {
             print("Failed\r\n");
         }
 
-        print_u32_hex(mailbox.0[28]);
-        print("\r\n");
-
         mailbox.0[28] &= 0x3FFFFFFF;
 
         Self {
@@ -114,7 +111,7 @@ impl FrameBuffer {
     }
 
     /*Bresenham's line algorithm
-    TODO: check if its possible to optimize y1==y2 case
+    TODO: check if its possible to optimize y1==y2 case (ARM neon?)
     */
     pub fn draw_line(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         if x1 == x2 {
