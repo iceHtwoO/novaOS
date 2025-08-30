@@ -11,3 +11,6 @@ opt-level = 0
 
 [profile.release]
 panic = "abort"
+
+[dependencies]
+libm = "0.2.15"

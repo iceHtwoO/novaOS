@@ -34,7 +34,7 @@ pub fn write_mailbox(channel: u32, data: u32) {
 }
 
 pub fn read_soc_temp() -> u32 {
-    let mut mailbox = [0; 36];
+    let mut mailbox = [0; 8];
     mailbox[0] = 8 * 4; // Total size in bytes
     mailbox[1] = 0; // Request
     mailbox[2] = 0x00030006; // Tag

@@ -21,7 +21,7 @@ jobs:
       - name: Run format check
         run: cargo fmt --check
       - name: Run lint
-        run: cargo clippy
+        run: cargo clippy -- -D warnings
 
   build:
     runs-on: ubuntu-latest

@@ -9,8 +9,10 @@ use core::{
 };
 
 use nova::{
+    framebuffer::{print_display_resolution, FrameBuffer, BLUE, GREEN, ORANGE, RED, YELLOW},
     irq_interrupt::enable_irq_source,
     mailbox::read_soc_temp,
+    math::polar_to_cartesian,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -92,12 +94,44 @@ pub extern "C" fn kernel_main() -> ! {
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
+    print_display_resolution();
+    let fb = FrameBuffer::new();
+    print_display_resolution();
+
+    for a in 0..360 {
+        let (x, y) = polar_to_cartesian(100.0, a as f32);
+        fb.draw_line(
+            150,
+            150,
+            (150.0 + x) as u32,
+            (150.0 + y) as u32,
+            a * (0x00FFFFFF / 360),
+        );
+    }
+
+    fb.draw_square(500, 500, 600, 700, RED);
+    fb.draw_square_fill(800, 800, 900, 900, GREEN);
+    fb.draw_square_fill(1000, 800, 1200, 700, BLUE);
+    fb.draw_square_fill(900, 100, 800, 150, RED | BLUE);
+    fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
+
+    fb.draw_function(cos, 100, 101, RED);
+    fb.draw_function(cos, 100, 102, ORANGE);
+    fb.draw_function(cos, 100, 103, YELLOW);
+    fb.draw_function(cos, 100, 104, GREEN);
+    fb.draw_function(cos, 100, 105, BLUE);
+
     loop {
         let temp = read_soc_temp();
         print_u32(temp);
+        print("\r\n");
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
+}
+
+fn cos(x: u32) -> f64 {
+    libm::cos(x as f64 * 0.1) * 20.0
 }
 
 pub fn get_current_el() -> u64 {

@@ -5,8 +5,10 @@ use core::ptr::{read_volatile, write_volatile};
 pub mod peripherals;
 
 pub mod configuration;
+pub mod framebuffer;
 pub mod irq_interrupt;
 pub mod mailbox;
+pub mod math;
 pub mod timer;
 
 pub fn mmio_read(address: u32) -> u32 {

@@ -57,7 +57,39 @@ pub fn print_u32(mut val: u32) {
         let s = str::from_utf8(&data).unwrap();
         print(s);
     }
-    print("\r\n");
+}
+
+pub fn print_u32_hex(mut val: u32) {
+    let mut last_valid = 0;
+    let mut values = [0u32; 8];
+    for (i, c) in (&mut values).iter_mut().enumerate() {
+        if val == 0 {
+            break;
+        }
+
+        *c = val % 16;
+        val /= 16;
+        if *c != 0 {
+            last_valid = i;
+        }
+    }
+
+    for (i, c) in values.iter().enumerate().rev() {
+        if i > last_valid {
+            continue;
+        }
+
+        let ascii_byte = if *c < 10 {
+            b'0' + *c as u8
+        } else {
+            b'A' - 10 + *c as u8
+        };
+
+        let data = [ascii_byte];
+
+        let s = str::from_utf8(&data).unwrap();
+        print(s);
+    }
 }
 
 /// Initialize UART peripheral
