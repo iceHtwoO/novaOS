@@ -2,6 +2,23 @@
 
 use core::ptr::{read_volatile, write_volatile};
 
+#[macro_export]
+macro_rules! print {
+    () => {};
+    ($($arg:tt)*) => {
+        $crate::peripherals::uart::_print(format_args!($($arg)*))
+    };
+}
+
+#[macro_export]
+macro_rules! println {
+    () => {};
+    ($($arg:tt)*) => {
+        print!($($arg)*);
+        print!("\r\n");
+    };
+}
+
 pub mod peripherals;
 
 pub mod configuration;

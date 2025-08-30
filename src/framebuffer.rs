@@ -4,21 +4,18 @@ mod bitmaps;
 
 use bitmaps::BASIC_LEGACY;
 
-use crate::{
-    mailbox::{read_mailbox, write_mailbox},
-    peripherals::uart::{print, print_u32, print_u32_hex},
-};
+use crate::mailbox::{read_mailbox, write_mailbox};
 #[repr(align(16))]
 struct Mailbox([u32; 36]);
 
-const ALLOCATE_BUFFER: u32 = 0x00040001;
-const GET_PHYSICAL_DISPLAY_WH: u32 = 0x00040003;
-const SET_PHYSICAL_DISPLAY_WH: u32 = 0x00048003;
-const SET_VIRTUAL_DISPLAY_WH: u32 = 0x00048004;
-const SET_PIXEL_DEPTH: u32 = 0x00048005;
-const SET_PIXEL_ORDER: u32 = 0x00048006;
-const SET_FB_OFFSET: u32 = 0x00048009;
-const GET_PITCH: u32 = 0x00040008;
+const ALLOCATE_BUFFER: u32 = 0x0004_0001;
+const GET_PHYSICAL_DISPLAY_WH: u32 = 0x0004_0003;
+const SET_PHYSICAL_DISPLAY_WH: u32 = 0x0004_8003;
+const SET_VIRTUAL_DISPLAY_WH: u32 = 0x0004_8004;
+const SET_PIXEL_DEPTH: u32 = 0x0004_8005;
+const SET_PIXEL_ORDER: u32 = 0x0004_8006;
+const GET_PITCH: u32 = 0x000_40008;
+const SET_FB_OFFSET: u32 = 0x0004_8009;
 
 pub struct FrameBuffer {
     pixel_depth: u32, // Bits per pixel
@@ -89,7 +86,7 @@ impl FrameBuffer {
 
         let _ = read_mailbox(8);
         if mailbox.0[1] == 0 {
-            print("Failed\r\n");
+            println!("Failed");
         }
 
         mailbox.0[28] &= 0x3FFFFFFF;
@@ -263,12 +260,8 @@ pub fn print_display_resolution() {
 
     let _ = read_mailbox(8);
     if mailbox[1] == 0 {
-        print("Failed\r\n");
+        println!("Failed");
     }
 
-    print("Width x Height: ");
-    print_u32(mailbox[5]);
-    print(" x ");
-    print_u32(mailbox[6]);
-    print("\r\n");
+    println!("Width x Height: {}x{}", mailbox[5], mailbox[6]);
 }

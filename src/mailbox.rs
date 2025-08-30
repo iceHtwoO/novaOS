@@ -1,4 +1,4 @@
-use crate::{mmio_read, mmio_write, peripherals::uart::print};
+use crate::{mmio_read, mmio_write, print};
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
 
@@ -51,7 +51,7 @@ pub fn read_soc_temp() -> u32 {
     let _ = read_mailbox(8);
 
     if mailbox[1] == 0 {
-        print("Failed\r\n");
+        println!("Failed");
     }
     let raw_temp = mailbox[6] / 1000;
     raw_temp

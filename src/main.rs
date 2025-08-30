@@ -18,8 +18,9 @@ use nova::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
             SpecificGpio,
         },
-        uart::{print, print_u32, uart_init},
+        uart::uart_init,
     },
+    print, println,
     timer::{delay_nops, sleep_us},
 };
 
@@ -34,7 +35,7 @@ extern "C" {
 #[panic_handler]
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
-        print("Panic\r\n");
+        println!("Panic");
     }
 }
 
@@ -64,7 +65,7 @@ pub extern "C" fn main() -> ! {
 
     // Delay so clock speed can stabilize
     delay_nops(50000);
-    print("Hello World!\r\n");
+    println!("Hello World!");
 
     unsafe {
         asm!("mrs x0, SCTLR_EL1");
@@ -123,8 +124,7 @@ pub extern "C" fn kernel_main() -> ! {
 
     loop {
         let temp = read_soc_temp();
-        print_u32(temp);
-        print("\r\n");
+        println!("{} °C", temp);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
@@ -163,6 +163,5 @@ fn print_current_el_str() {
         _ => "Unknown EL",
     };
 
-    print(el_str);
-    print("\r\n");
+    println!("{}", el_str);
 }

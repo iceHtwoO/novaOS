@@ -1,4 +1,7 @@
-use core::arch::asm;
+use core::{
+    arch::asm,
+    fmt::{self, Write},
+};
 
 use crate::{mmio_read, mmio_write};
 
@@ -20,76 +23,28 @@ const UART0_CR_TXE: u32 = 1 << 8;
 const UART0_LCRH: u32 = 0x3F20_102c;
 const UART0_LCRH_FEN: u32 = 1 << 4;
 
-/// Print `s` over UART
-pub fn print(s: &str) {
-    for byte in s.bytes() {
-        while (mmio_read(UART0_FR) & UART0_FR_TXFF) != 0 {
-            unsafe { asm!("nop") }
-        }
-        mmio_write(UART0_DR, byte as u32);
-    }
-    // wait till uart is not busy anymore
-    while ((mmio_read(UART0_FR) >> 3) & 0b1) != 0 {}
-}
+pub struct Uart;
 
-pub fn print_u32(mut val: u32) {
-    let mut last_valid = 0;
-    let mut values = [0u32; 10];
-    for (i, c) in (&mut values).iter_mut().enumerate() {
-        if val == 0 {
-            break;
+impl Write for Uart {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for byte in s.bytes() {
+            while (mmio_read(UART0_FR) & UART0_FR_TXFF) != 0 {
+                unsafe { asm!("nop") }
+            }
+            mmio_write(UART0_DR, byte as u32);
         }
-
-        *c = val % 10;
-        val /= 10;
-        if *c != 0 {
-            last_valid = i;
-        }
-    }
-
-    for (i, c) in values.iter().enumerate().rev() {
-        if i > last_valid {
-            continue;
-        }
-        let ascii_byte = b'0' + *c as u8;
-        let data = [ascii_byte];
-
-        let s = str::from_utf8(&data).unwrap();
-        print(s);
+        // wait till uart is not busy anymore
+        while ((mmio_read(UART0_FR) >> 3) & 0b1) != 0 {}
+        Ok(())
     }
 }
 
-pub fn print_u32_hex(mut val: u32) {
-    let mut last_valid = 0;
-    let mut values = [0u32; 8];
-    for (i, c) in (&mut values).iter_mut().enumerate() {
-        if val == 0 {
-            break;
-        }
+pub fn _print(args: fmt::Arguments) {
+    let _ = Uart.write_fmt(args);
+}
 
-        *c = val % 16;
-        val /= 16;
-        if *c != 0 {
-            last_valid = i;
-        }
-    }
-
-    for (i, c) in values.iter().enumerate().rev() {
-        if i > last_valid {
-            continue;
-        }
-
-        let ascii_byte = if *c < 10 {
-            b'0' + *c as u8
-        } else {
-            b'A' - 10 + *c as u8
-        };
-
-        let data = [ascii_byte];
-
-        let s = str::from_utf8(&data).unwrap();
-        print(s);
-    }
+pub fn _print_str(st: &str) {
+    let _ = Uart.write_str(st);
 }
 
 /// Initialize UART peripheral
