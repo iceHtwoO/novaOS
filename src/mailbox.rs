@@ -13,6 +13,51 @@ const MBOX_WRITE: u32 = MBOX_BASE + 0x20;
 const MAIL_FULL: u32 = 0x80000000;
 const MAIL_EMPTY: u32 = 0x40000000;
 
+const HEADER_LENGTH: usize = 4 + 4 + 4 + 4 + 4; // Total Size + Request + Tag + MaxBufferLength + RequestLength
+const FOOTER_LENGTH: usize = 4;
+
+macro_rules! max {
+    ($a:expr, $b:expr) => {{
+        const M: usize = if $a > $b { $a as usize } else { $b as usize };
+        M
+    }};
+}
+
+#[macro_export]
+macro_rules! mailbox_command {
+    ($name:ident,$tag:expr, $request_len:expr,$response_len:expr) => {
+        /// More information at: https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
+        pub fn $name(request_data: [u32; $request_len / 4]) -> [u32; $response_len / 4] {
+            let mut mailbox =
+                [0u32; (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) / 4];
+            mailbox[0] = (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) as u32; // Total length in Bytes
+            mailbox[1] = 0; // Request
+            mailbox[2] = $tag; // Command Tag
+            mailbox[3] = max!($request_len, $response_len) as u32; // Max value buffer size
+            mailbox[4] = $request_len;
+            mailbox[5..(5 + ($request_len / 4))].copy_from_slice(&request_data);
+
+            mailbox[(5 + ($request_len / 4))..].fill(0);
+
+            let addr = core::ptr::addr_of!(mailbox[0]) as u32;
+
+            write_mailbox(8, addr);
+
+            let _ = read_mailbox(8);
+
+            if mailbox[1] == 0 {
+                println!("Mailbox Command Failed!");
+            }
+
+            let mut out = [0u32; $response_len / 4]; // TODO: Can this be improved?
+            out.copy_from_slice(&mailbox[5..(5 + $response_len / 4)]);
+            out
+        }
+    };
+}
+
+mailbox_command!(read_soc_temp, 0x00030006, 4, 8);
+
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty
     loop {
@@ -31,28 +76,4 @@ pub fn read_mailbox(channel: u32) -> u32 {
 pub fn write_mailbox(channel: u32, data: u32) {
     while mmio_read(MBOX_STATUS) & MAIL_FULL != 0 {}
     mmio_write(MBOX_WRITE, (data & !0xF) | (channel & 0xF));
-}
-
-pub fn read_soc_temp() -> u32 {
-    let mut mailbox = [0; 8];
-    mailbox[0] = 8 * 4; // Total size in bytes
-    mailbox[1] = 0; // Request
-    mailbox[2] = 0x00030006; // Tag
-    mailbox[3] = 8; // Maximum buffer len
-    mailbox[4] = 4; // Request length
-    mailbox[5] = 0; // Value Buffer
-    mailbox[6] = 0; // Value Buffer
-    mailbox[7] = 0; // End
-
-    let addr = core::ptr::addr_of!(mailbox[0]) as u32;
-
-    write_mailbox(8, addr);
-
-    let _ = read_mailbox(8);
-
-    if mailbox[1] == 0 {
-        println!("Failed");
-    }
-    let raw_temp = mailbox[6] / 1000;
-    raw_temp
 }

@@ -123,8 +123,8 @@ pub extern "C" fn kernel_main() -> ! {
     fb.draw_function(cos, 100, 105, BLUE);
 
     loop {
-        let temp = read_soc_temp();
-        println!("{} °C", temp);
+        let temp = read_soc_temp([0]);
+        println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
