@@ -1,4 +1,4 @@
-use crate::{mmio_read, mmio_write, print};
+use crate::{mmio_read, mmio_write, NovaError};
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
 
@@ -25,9 +25,11 @@ macro_rules! max {
 
 #[macro_export]
 macro_rules! mailbox_command {
-    ($name:ident,$tag:expr, $request_len:expr,$response_len:expr) => {
+    ($name:ident, $tag:expr, $request_len:expr,$response_len:expr) => {
         /// More information at: https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
-        pub fn $name(request_data: [u32; $request_len / 4]) -> [u32; $response_len / 4] {
+        pub fn $name(
+            request_data: [u32; $request_len / 4],
+        ) -> Result<[u32; $response_len / 4], NovaError> {
             let mut mailbox =
                 [0u32; (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) / 4];
             mailbox[0] = (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) as u32; // Total length in Bytes
@@ -35,8 +37,8 @@ macro_rules! mailbox_command {
             mailbox[2] = $tag; // Command Tag
             mailbox[3] = max!($request_len, $response_len) as u32; // Max value buffer size
             mailbox[4] = $request_len;
-            mailbox[5..(5 + ($request_len / 4))].copy_from_slice(&request_data);
 
+            mailbox[5..(5 + ($request_len / 4))].copy_from_slice(&request_data);
             mailbox[(5 + ($request_len / 4))..].fill(0);
 
             let addr = core::ptr::addr_of!(mailbox[0]) as u32;
@@ -46,17 +48,17 @@ macro_rules! mailbox_command {
             let _ = read_mailbox(8);
 
             if mailbox[1] == 0 {
-                println!("Mailbox Command Failed!");
+                return Err(NovaError::Mailbox);
             }
 
             let mut out = [0u32; $response_len / 4]; // TODO: Can this be improved?
             out.copy_from_slice(&mailbox[5..(5 + $response_len / 4)]);
-            out
+            Ok(out)
         }
     };
 }
 
-mailbox_command!(read_soc_temp, 0x00030006, 4, 8);
+mailbox_command!(mb_read_soc_temp, 0x00030006, 4, 8);
 
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty

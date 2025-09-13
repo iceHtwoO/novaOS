@@ -11,7 +11,7 @@ use core::{
 use nova::{
     framebuffer::{print_display_resolution, FrameBuffer, BLUE, GREEN, ORANGE, RED, YELLOW},
     irq_interrupt::enable_irq_source,
-    mailbox::read_soc_temp,
+    mailbox::mb_read_soc_temp,
     math::polar_to_cartesian,
     peripherals::{
         gpio::{
@@ -72,12 +72,13 @@ pub extern "C" fn main() -> ! {
         el2_to_el1();
     }
 
+    #[allow(clippy::empty_loop)]
     loop {}
 }
 
 unsafe fn zero_bss() {
-    let mut bss: *mut u32 = &raw mut __bss_start as *mut u32;
-    while bss < &raw mut __bss_end as *mut u32 {
+    let mut bss: *mut u32 = &raw mut __bss_start;
+    while bss < &raw mut __bss_end {
         write_volatile(bss, 0);
         bss = bss.add(1);
     }
@@ -123,7 +124,7 @@ pub extern "C" fn kernel_main() -> ! {
     fb.draw_function(cos, 100, 105, BLUE);
 
     loop {
-        let temp = read_soc_temp([0]);
+        let temp = mb_read_soc_temp([0]).unwrap();
         println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);

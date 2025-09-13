@@ -35,3 +35,8 @@ pub fn mmio_read(address: u32) -> u32 {
 pub fn mmio_write(address: u32, data: u32) {
     unsafe { write_volatile(address as *mut u32, data) }
 }
+
+#[derive(Debug)]
+pub enum NovaError {
+    Mailbox,
+}

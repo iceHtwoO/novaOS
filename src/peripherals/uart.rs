@@ -20,7 +20,7 @@ const UART0_CR: u32 = 0x3F20_1030;
 const UART0_CR_UARTEN: u32 = 1 << 0;
 const UART0_CR_TXE: u32 = 1 << 8;
 
-const UART0_LCRH: u32 = 0x3F20_102c;
+const UART0_LCRH: u32 = 0x3F20_102C;
 const UART0_LCRH_FEN: u32 = 1 << 4;
 
 pub struct Uart;

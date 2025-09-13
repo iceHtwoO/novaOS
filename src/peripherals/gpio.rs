@@ -77,7 +77,7 @@ pub fn gpio_get_state(gpio: u8) -> u8 {
     let register_addr = GPLEV_BASE + (register_index as u32 * 4);
 
     let state = mmio_read(register_addr);
-    return ((state >> register_offset) & 0b1) as u8;
+    ((state >> register_offset) & 0b1) as u8
 }
 
 /// Pull GPIO up
