@@ -8,11 +8,14 @@ use core::{
     ptr::write_volatile,
 };
 
+extern crate alloc;
+use alloc::vec::Vec;
+
 use nova::{
-    framebuffer::{print_display_resolution, FrameBuffer, BLUE, GREEN, ORANGE, RED, YELLOW},
+    framebuffer::{FrameBuffer, BLUE, GREEN, RED},
+    heap::{init_malloc, malloc, traverse_heap_tree},
     irq_interrupt::enable_irq_source,
     mailbox::mb_read_soc_temp,
-    math::polar_to_cartesian,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -44,7 +47,7 @@ fn panic(_panic: &PanicInfo) -> ! {
 pub unsafe extern "C" fn _start() {
     // Set the stack pointer
     asm!(
-        "ldr x0, =0x8008000",
+        "ldr x0, =__stack_end",
         "mov sp, x0",
         "b main",
         options(noreturn)
@@ -60,8 +63,6 @@ pub extern "C" fn main() -> ! {
 
     // Set ACT Led to Outout
     let _ = set_gpio_function(21, GPIOFunction::Output);
-
-    print_current_el_str();
 
     // Delay so clock speed can stabilize
     delay_nops(50000);
@@ -86,7 +87,20 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
-    print_current_el_str();
+    println!("EL: {}", get_current_el());
+
+    // Heap stuff
+    init_malloc();
+    malloc(32).unwrap();
+    malloc(32).unwrap();
+
+    let mut vector = Vec::<u32>::new();
+
+    vector.push(5);
+    malloc(32).unwrap();
+    vector.push(8);
+    vector.push(8);
+    vector.push(8);
 
     sleep_us(500_000);
 
@@ -96,20 +110,7 @@ pub extern "C" fn kernel_main() -> ! {
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
-    print_display_resolution();
     let fb = FrameBuffer::new();
-    print_display_resolution();
-
-    for a in 0..360 {
-        let (x, y) = polar_to_cartesian(100.0, a as f32);
-        fb.draw_line(
-            150,
-            150,
-            (150.0 + x) as u32,
-            (150.0 + y) as u32,
-            a * (0x00FFFFFF / 360),
-        );
-    }
 
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);
@@ -118,10 +119,6 @@ pub extern "C" fn kernel_main() -> ! {
     fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
 
     fb.draw_function(cos, 100, 101, RED);
-    fb.draw_function(cos, 100, 102, ORANGE);
-    fb.draw_function(cos, 100, 103, YELLOW);
-    fb.draw_function(cos, 100, 104, GREEN);
-    fb.draw_function(cos, 100, 105, BLUE);
 
     loop {
         let temp = mb_read_soc_temp([0]).unwrap();
@@ -152,17 +149,4 @@ fn enable_uart() {
     // Set GPIO Pins to UART
     let _ = set_gpio_function(14, GPIOFunction::Alternative0);
     let _ = set_gpio_function(15, GPIOFunction::Alternative0);
-}
-
-fn print_current_el_str() {
-    let el = get_current_el();
-    let el_str = match el {
-        0b11 => "Level 3",
-        0b10 => "Level 2",
-        0b01 => "Level 1",
-        0b00 => "Level 0",
-        _ => "Unknown EL",
-    };
-
-    println!("{}", el_str);
 }
