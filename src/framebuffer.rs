@@ -9,7 +9,6 @@ use crate::mailbox::{read_mailbox, write_mailbox};
 struct Mailbox([u32; 36]);
 
 const ALLOCATE_BUFFER: u32 = 0x0004_0001;
-const GET_PHYSICAL_DISPLAY_WH: u32 = 0x0004_0003;
 const SET_PHYSICAL_DISPLAY_WH: u32 = 0x0004_8003;
 const SET_VIRTUAL_DISPLAY_WH: u32 = 0x0004_8004;
 const SET_PIXEL_DEPTH: u32 = 0x0004_8005;
@@ -241,27 +240,4 @@ impl FrameBuffer {
             self.draw_pixel((x + x_offset) as u32, (y + y_offset as f64) as u32, color);
         }
     }
-}
-
-pub fn print_display_resolution() {
-    let mut mailbox: [u32; 8] = [0; 8];
-    mailbox[0] = 8 * 4;
-    mailbox[1] = 0;
-    mailbox[2] = GET_PHYSICAL_DISPLAY_WH;
-    mailbox[3] = 8;
-    mailbox[4] = 0;
-    mailbox[5] = 0;
-    mailbox[6] = 0;
-    mailbox[7] = 0;
-
-    let addr = core::ptr::addr_of!(mailbox[0]) as u32;
-
-    write_mailbox(8, addr);
-
-    let _ = read_mailbox(8);
-    if mailbox[1] == 0 {
-        println!("Failed");
-    }
-
-    println!("Width x Height: {}x{}", mailbox[5], mailbox[6]);
 }

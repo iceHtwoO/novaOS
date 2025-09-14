@@ -58,7 +58,10 @@ macro_rules! mailbox_command {
     };
 }
 
-mailbox_command!(mb_read_soc_temp, 0x00030006, 4, 8);
+mailbox_command!(mb_read_soc_temp, 0x0003_0006, 4, 8);
+
+// Framebuffer
+mailbox_command!(mb_get_display_resolution, 0x0004_0003, 0, 8);
 
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty

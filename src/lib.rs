@@ -23,9 +23,9 @@ pub mod peripherals;
 
 pub mod configuration;
 pub mod framebuffer;
+pub mod heap;
 pub mod irq_interrupt;
 pub mod mailbox;
-pub mod math;
 pub mod timer;
 
 pub fn mmio_read(address: u32) -> u32 {
@@ -39,4 +39,6 @@ pub fn mmio_write(address: u32, data: u32) {
 #[derive(Debug)]
 pub enum NovaError {
     Mailbox,
+    HeapFull,
+    EmptyHeapSegmentNotAllowed,
 }
