@@ -9,11 +9,10 @@ use core::{
 };
 
 extern crate alloc;
-use alloc::vec::Vec;
 
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    heap::{init_malloc, malloc, traverse_heap_tree},
+    heap::init_heap,
     irq_interrupt::enable_irq_source,
     mailbox::mb_read_soc_temp,
     peripherals::{
@@ -89,18 +88,8 @@ unsafe fn zero_bss() {
 pub extern "C" fn kernel_main() -> ! {
     println!("EL: {}", get_current_el());
 
-    // Heap stuff
-    init_malloc();
-    malloc(32).unwrap();
-    malloc(32).unwrap();
-
-    let mut vector = Vec::<u32>::new();
-
-    vector.push(5);
-    malloc(32).unwrap();
-    vector.push(8);
-    vector.push(8);
-    vector.push(8);
+    // Initialize the first heap header
+    init_heap();
 
     sleep_us(500_000);
 
