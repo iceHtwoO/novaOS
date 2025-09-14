@@ -8,11 +8,13 @@ NovaOS is a expository project where I build a kernel from scratch for a Raspber
 
 - Delay and sleep ✓
 - UART ✓
+- Switching ELs ✓
 - GPIOs ✓
 - GPIO Interrupts ✓
 - Communicate with peripherals via mailboxes ✓
 - Frame Buffer ✓
-- Heap Memory allocation
+- Heap Memory allocation ✓
+- Multi Core
 - Dynamic clock speed
 - MMU
 - Multiprocessing
