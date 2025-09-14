@@ -99,7 +99,7 @@ impl Heap {
 
     pub fn malloc(&self, mut size: usize) -> Result<*mut u8, NovaError> {
         if size == 0 {
-            return Err(NovaError::EmptyHeapNotAllowed);
+            return Err(NovaError::EmptyHeapSegmentNotAllowed);
         }
 
         if size < MIN_BLOCK_SIZE {
@@ -120,32 +120,36 @@ impl Heap {
                 return Ok(current.byte_add(HEAP_HEADER_SIZE) as *mut u8);
             }
 
-            let byte_offset = HEAP_HEADER_SIZE + size;
-            let new_address = current.byte_add(byte_offset);
-
-            // Handle case where fragmenting center free space
-            let next = (*current).next;
-            if !(*current).next.is_null() {
-                (*next).before = new_address;
-            }
-
-            ptr::write(
-                new_address as *mut HeapHeader,
-                HeapHeader {
-                    next,
-                    before: current,
-                    size: (*current).size - size - HEAP_HEADER_SIZE,
-                    free: true,
-                },
-            );
-            (*current).next = new_address;
-            (*current).free = false;
-            (*current).size = size;
+            Self::fragment_segment(current, size);
 
             let data_start_address = current.byte_add(HEAP_HEADER_SIZE);
 
             Ok(data_start_address as *mut u8)
         }
+    }
+
+    unsafe fn fragment_segment(current: *mut HeapHeader, size: usize) {
+        let byte_offset = HEAP_HEADER_SIZE + size;
+        let new_address = current.byte_add(byte_offset);
+
+        // Handle case where fragmenting center free space
+        let next = (*current).next;
+        if !(*current).next.is_null() {
+            (*next).before = new_address;
+        }
+
+        ptr::write(
+            new_address as *mut HeapHeader,
+            HeapHeader {
+                next,
+                before: current,
+                size: (*current).size - size - HEAP_HEADER_SIZE,
+                free: true,
+            },
+        );
+        (*current).next = new_address;
+        (*current).free = false;
+        (*current).size = size;
     }
 
     pub fn free(&self, pointer: *mut u8) -> Result<(), NovaError> {
@@ -167,6 +171,7 @@ impl Heap {
                 (*segment).size += (*next_head).size + HEAP_HEADER_SIZE;
                 delete_header(next_head);
             }
+
             // Neither: Set free
             (*segment).free = true;
         }
@@ -182,7 +187,7 @@ impl Heap {
             println!("free: {}", head.free);
             println!("size: {}", head.size);
             println!("hasNext: {}", !head.next.is_null());
-            println!();
+            println!("");
             if !head.next.is_null() {
                 pointer_address = head.next;
             } else {

@@ -40,5 +40,5 @@ pub fn mmio_write(address: u32, data: u32) {
 pub enum NovaError {
     Mailbox,
     HeapFull,
-    EmptyHeapNotAllowed,
+    EmptyHeapSegmentNotAllowed,
 }
