@@ -1,7 +1,7 @@
 #![no_main]
 #![no_std]
 #![feature(asm_experimental_arch)]
-
+#![allow(static_mut_refs)]
 use core::{
     arch::{asm, global_asm},
     panic::PanicInfo,
@@ -12,7 +12,7 @@ extern crate alloc;
 
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    heap::init_heap,
+    heap::{init_global_heap, HEAP},
     irq_interrupt::enable_irq_source,
     mailbox::mb_read_soc_temp,
     peripherals::{
@@ -88,8 +88,7 @@ unsafe fn zero_bss() {
 pub extern "C" fn kernel_main() -> ! {
     println!("EL: {}", get_current_el());
 
-    // Initialize the first heap header
-    init_heap();
+    heap_test();
 
     sleep_us(500_000);
 
@@ -117,11 +116,28 @@ pub extern "C" fn kernel_main() -> ! {
     }
 }
 
+fn heap_test() {
+    unsafe {
+        init_global_heap();
+        let a = HEAP.malloc(32).unwrap();
+        let b = HEAP.malloc(64).unwrap();
+        let c = HEAP.malloc(128).unwrap();
+        let _ = HEAP.malloc(256).unwrap();
+        HEAP.traverse_heap();
+        HEAP.free(b).unwrap();
+        HEAP.traverse_heap();
+        HEAP.free(a).unwrap();
+        HEAP.traverse_heap();
+        HEAP.free(c).unwrap();
+        HEAP.traverse_heap();
+    }
+}
+
 fn cos(x: u32) -> f64 {
     libm::cos(x as f64 * 0.1) * 20.0
 }
 
-pub fn get_current_el() -> u64 {
+fn get_current_el() -> u64 {
     let el: u64;
     unsafe {
         asm!(
