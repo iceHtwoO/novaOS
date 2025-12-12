@@ -51,7 +51,7 @@ macro_rules! mailbox_command {
                 return Err(NovaError::Mailbox);
             }
 
-            let mut out = [0u32; $response_len / 4]; // TODO: Can this be improved?
+            let mut out = [0u32; $response_len / 4];
             out.copy_from_slice(&mailbox[5..(5 + $response_len / 4)]);
             Ok(out)
         }
