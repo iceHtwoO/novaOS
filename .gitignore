@@ -3,3 +3,4 @@ kernel8.img
 .env
 sd.img
 settings.json
+.DS_Store
