@@ -1,6 +1,33 @@
 #![no_std]
 
-use core::ptr::{read_volatile, write_volatile};
+use core::{
+    panic::PanicInfo,
+    ptr::{read_volatile, write_volatile},
+};
+
+use heap::Heap;
+
+unsafe extern "C" {
+    unsafe static mut __heap_start: u8;
+    unsafe static mut __heap_end: u8;
+}
+
+#[global_allocator]
+pub static mut GLOBAL_ALLOCATOR: Heap = Heap::empty();
+
+pub unsafe fn init_heap() {
+    let start = core::ptr::addr_of_mut!(__heap_start) as usize;
+    let end = core::ptr::addr_of_mut!(__heap_end) as usize;
+
+    GLOBAL_ALLOCATOR.init(start, end);
+}
+
+#[panic_handler]
+fn panic(_panic: &PanicInfo) -> ! {
+    loop {
+        println!("Panic");
+    }
+}
 
 #[macro_export]
 macro_rules! print {
@@ -23,7 +50,6 @@ pub mod peripherals;
 
 pub mod configuration;
 pub mod framebuffer;
-pub mod heap;
 pub mod irq_interrupt;
 pub mod mailbox;
 pub mod timer;
@@ -34,11 +60,4 @@ pub fn mmio_read(address: u32) -> u32 {
 
 pub fn mmio_write(address: u32, data: u32) {
     unsafe { write_volatile(address as *mut u32, data) }
-}
-
-#[derive(Debug)]
-pub enum NovaError {
-    Mailbox,
-    HeapFull,
-    EmptyHeapSegmentNotAllowed,
 }

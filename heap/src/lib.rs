@@ -1,17 +1,21 @@
 #![allow(static_mut_refs)]
+#![cfg_attr(not(test), no_std)]
 
 use core::{
     alloc::GlobalAlloc,
+    default::Default,
+    mem::size_of,
+    prelude::v1::*,
     ptr::{self, null_mut, read_volatile},
+    result::Result,
 };
 
-use crate::NovaError;
-extern crate alloc;
+use NovaError::NovaError;
 
-extern "C" {
-    static mut __heap_start: u8;
-    static mut __heap_end: u8;
-}
+#[cfg(not(target_os = "none"))]
+extern crate std;
+
+extern crate alloc;
 
 #[repr(C, align(16))]
 pub struct HeapHeader {
@@ -27,51 +31,26 @@ const MIN_BLOCK_SIZE: usize = 16;
 // TODO: This implementation has to be reevaluated when implementing multiprocessing
 // Spinlock could be a solution but has its issues:
 // https://matklad.github.io/2020/01/02/spinlocks-considered-harmful.html
-pub static mut HEAP: Heap = Heap {
-    start_address: &raw mut __heap_start as *mut HeapHeader,
-    end_address: &raw mut __heap_end as *mut HeapHeader,
-    raw_size: 0,
-};
-
-// TODO: investigate if there is a better alternative to this
-pub unsafe fn init_global_heap() {
-    HEAP.init();
-}
-
-#[derive(Default)]
-pub struct Novalloc;
-
-unsafe impl GlobalAlloc for Novalloc {
-    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
-        HEAP.malloc(layout.size()).unwrap()
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, _: core::alloc::Layout) {
-        HEAP.free(ptr).unwrap();
-    }
-}
-
-#[global_allocator]
-static GLOBAL_ALLOCATOR: Novalloc = Novalloc;
 
 pub struct Heap {
-    start_address: *mut HeapHeader,
-    end_address: *mut HeapHeader,
-    raw_size: usize,
+    pub start_address: *mut HeapHeader,
+    pub end_address: *mut HeapHeader,
+    pub raw_size: usize,
 }
 impl Heap {
-    pub fn new(heap_start: usize, heap_end: usize) -> Self {
-        let mut instance = Self {
-            start_address: &raw const heap_start as *mut HeapHeader,
-            end_address: &raw const heap_end as *mut HeapHeader,
-            raw_size: heap_end - heap_start,
-        };
-        instance.init();
-        instance
+    pub const fn empty() -> Self {
+        Self {
+            start_address: null_mut() as *mut HeapHeader,
+            end_address: null_mut() as *mut HeapHeader,
+            raw_size: 0,
+        }
     }
 
-    fn init(&mut self) {
-        self.raw_size = self.end_address as usize - self.start_address as usize;
+    pub fn init(&mut self, heap_start: usize, heap_end: usize) {
+        self.start_address = heap_start as *mut HeapHeader;
+        self.end_address = heap_end as *mut HeapHeader;
+
+        self.raw_size = heap_end - heap_start;
 
         unsafe {
             ptr::write(
@@ -130,7 +109,7 @@ impl Heap {
 
     unsafe fn fragment_segment(current: *mut HeapHeader, size: usize) {
         let byte_offset = HEAP_HEADER_SIZE + size;
-        let new_address = current.byte_add(byte_offset);
+        let new_address = unsafe { current.byte_add(byte_offset) };
 
         // Handle case where fragmenting center free space
         let next = (*current).next;
@@ -138,15 +117,17 @@ impl Heap {
             (*next).before = new_address;
         }
 
-        ptr::write(
-            new_address as *mut HeapHeader,
-            HeapHeader {
-                next,
-                before: current,
-                size: (*current).size - size - HEAP_HEADER_SIZE,
-                free: true,
-            },
-        );
+        unsafe {
+            ptr::write(
+                new_address as *mut HeapHeader,
+                HeapHeader {
+                    next,
+                    before: current,
+                    size: (*current).size - size - HEAP_HEADER_SIZE,
+                    free: true,
+                },
+            )
+        };
         (*current).next = new_address;
         (*current).free = false;
         (*current).size = size;
@@ -178,25 +159,19 @@ impl Heap {
 
         Ok(())
     }
+}
 
-    pub fn traverse_heap(&self) {
-        let mut pointer_address = self.start_address;
-        loop {
-            let head = unsafe { read_volatile(pointer_address) };
-            println!("Header {:#x}", pointer_address as u32);
-            println!("free: {}", head.free);
-            println!("size: {}", head.size);
-            println!("hasNext: {}", !head.next.is_null());
-            println!("");
-            if !head.next.is_null() {
-                pointer_address = head.next;
-            } else {
-                println!("---------------");
-                return;
-            }
-        }
+unsafe impl GlobalAlloc for Heap {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        self.malloc(layout.size()).unwrap()
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _: core::alloc::Layout) {
+        self.free(ptr).unwrap();
     }
 }
+
+unsafe impl Sync for Heap {}
 
 unsafe fn fits(size: usize, header: *mut HeapHeader) -> bool {
     (*header).free && size <= (*header).size
@@ -214,3 +189,6 @@ unsafe fn delete_header(header: *mut HeapHeader) {
         (*next).before = before;
     }
 }
+
+#[cfg(test)]
+mod tests {}

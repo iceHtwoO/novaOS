@@ -1,4 +1,4 @@
-use crate::{mmio_read, mmio_write, NovaError};
+use crate::{mmio_read, mmio_write};
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
 
@@ -29,7 +29,7 @@ macro_rules! mailbox_command {
         /// More information at: https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
         pub fn $name(
             request_data: [u32; $request_len / 4],
-        ) -> Result<[u32; $response_len / 4], NovaError> {
+        ) -> Result<[u32; $response_len / 4], NovaError::NovaError> {
             let mut mailbox =
                 [0u32; (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) / 4];
             mailbox[0] = (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) as u32; // Total length in Bytes
@@ -48,7 +48,7 @@ macro_rules! mailbox_command {
             let _ = read_mailbox(8);
 
             if mailbox[1] == 0 {
-                return Err(NovaError::Mailbox);
+                return Err(NovaError::NovaError::Mailbox);
             }
 
             let mut out = [0u32; $response_len / 4];

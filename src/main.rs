@@ -4,7 +4,6 @@
 #![allow(static_mut_refs)]
 use core::{
     arch::{asm, global_asm},
-    panic::PanicInfo,
     ptr::write_volatile,
 };
 
@@ -12,7 +11,7 @@ extern crate alloc;
 
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    heap::{init_global_heap, HEAP},
+    init_heap,
     irq_interrupt::enable_irq_source,
     mailbox::mb_read_soc_temp,
     peripherals::{
@@ -24,6 +23,7 @@ use nova::{
     },
     print, println,
     timer::{delay_nops, sleep_us},
+    GLOBAL_ALLOCATOR,
 };
 
 global_asm!(include_str!("vector.S"));
@@ -34,15 +34,8 @@ extern "C" {
     static mut __bss_end: u32;
 }
 
-#[panic_handler]
-fn panic(_panic: &PanicInfo) -> ! {
-    loop {
-        println!("Panic");
-    }
-}
-
 #[no_mangle]
-#[link_section = ".text._start"]
+#[cfg_attr(not(test), link_section = ".text._start")]
 pub unsafe extern "C" fn _start() {
     // Set the stack pointer
     asm!(
@@ -88,7 +81,10 @@ unsafe fn zero_bss() {
 pub extern "C" fn kernel_main() -> ! {
     println!("EL: {}", get_current_el());
 
-    heap_test();
+    unsafe {
+        init_heap();
+        heap_test();
+    };
 
     sleep_us(500_000);
 
@@ -116,21 +112,14 @@ pub extern "C" fn kernel_main() -> ! {
     }
 }
 
-fn heap_test() {
-    unsafe {
-        init_global_heap();
-        let a = HEAP.malloc(32).unwrap();
-        let b = HEAP.malloc(64).unwrap();
-        let c = HEAP.malloc(128).unwrap();
-        let _ = HEAP.malloc(256).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(b).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(a).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(c).unwrap();
-        HEAP.traverse_heap();
-    }
+unsafe fn heap_test() {
+    let a = GLOBAL_ALLOCATOR.malloc(32).unwrap();
+    let b = GLOBAL_ALLOCATOR.malloc(64).unwrap();
+    let c = GLOBAL_ALLOCATOR.malloc(128).unwrap();
+    let _ = GLOBAL_ALLOCATOR.malloc(256).unwrap();
+    GLOBAL_ALLOCATOR.free(b).unwrap();
+    GLOBAL_ALLOCATOR.free(a).unwrap();
+    GLOBAL_ALLOCATOR.free(c).unwrap();
 }
 
 fn cos(x: u32) -> f64 {
