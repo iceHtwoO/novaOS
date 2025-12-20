@@ -16,6 +16,7 @@ const SET_PIXEL_ORDER: u32 = 0x0004_8006;
 const GET_PITCH: u32 = 0x000_40008;
 const SET_FB_OFFSET: u32 = 0x0004_8009;
 
+#[allow(dead_code)]
 pub struct FrameBuffer {
     pixel_depth: u32, // Bits per pixel
     pitch: u32,       // Pixel per row
@@ -31,74 +32,6 @@ pub const ORANGE: u32 = 0x00FFA500;
 pub const YELLOW: u32 = 0x00FFFF00;
 
 impl FrameBuffer {
-    pub fn new() -> Self {
-        let mut mailbox = Mailbox([0; 36]);
-        mailbox.0[0] = 35 * 4;
-        mailbox.0[1] = 0;
-
-        mailbox.0[2] = SET_PHYSICAL_DISPLAY_WH;
-        mailbox.0[3] = 8;
-        mailbox.0[4] = 8;
-        mailbox.0[5] = 1920;
-        mailbox.0[6] = 1080;
-
-        mailbox.0[7] = SET_VIRTUAL_DISPLAY_WH;
-        mailbox.0[8] = 8;
-        mailbox.0[9] = 8;
-        mailbox.0[10] = 1920;
-        mailbox.0[11] = 1080;
-
-        mailbox.0[12] = SET_PIXEL_DEPTH;
-        mailbox.0[13] = 4;
-        mailbox.0[14] = 4;
-        mailbox.0[15] = 32; // 32 bit per pixel
-
-        mailbox.0[16] = SET_PIXEL_ORDER;
-        mailbox.0[17] = 4;
-        mailbox.0[18] = 4;
-        mailbox.0[19] = 0x0; // RGB
-
-        mailbox.0[20] = SET_FB_OFFSET;
-        mailbox.0[21] = 8;
-        mailbox.0[22] = 8;
-        mailbox.0[23] = 0; // X in pixels
-        mailbox.0[24] = 0; // Y in pixels
-
-        mailbox.0[25] = ALLOCATE_BUFFER;
-        mailbox.0[26] = 8;
-        mailbox.0[27] = 4;
-        mailbox.0[28] = 4096; // Alignment
-        mailbox.0[29] = 0;
-
-        mailbox.0[30] = GET_PITCH;
-        mailbox.0[31] = 4;
-        mailbox.0[32] = 0;
-        mailbox.0[33] = 0;
-
-        mailbox.0[34] = 0; // End tag
-
-        // TODO: validate responses
-
-        let addr = core::ptr::addr_of!(mailbox.0[0]) as u32;
-
-        write_mailbox(8, addr);
-
-        let _ = read_mailbox(8);
-        if mailbox.0[1] == 0 {
-            println!("Failed");
-        }
-
-        mailbox.0[28] &= 0x3FFFFFFF;
-
-        Self {
-            pixel_depth: mailbox.0[15],
-            pitch: mailbox.0[33] / (mailbox.0[15] / 8),
-            rows: mailbox.0[29] / mailbox.0[33],
-            start_addr: mailbox.0[28] as *mut u32,
-            size: mailbox.0[29],
-        }
-    }
-
     pub fn draw_pixel(&self, x: u32, y: u32, color: u32) {
         let offset = x + y * self.pitch;
         unsafe {
@@ -109,6 +42,7 @@ impl FrameBuffer {
     /*Bresenham's line algorithm
     TODO: check if its possible to optimize y1==y2 case (ARM neon?)
     */
+    #[allow(clippy::collapsible_else_if)]
     pub fn draw_line(&self, x1: u32, y1: u32, x2: u32, y2: u32, color: u32) {
         if x1 == x2 {
             for y in y1..=y2 {
@@ -218,7 +152,7 @@ impl FrameBuffer {
     }
 
     fn draw_ascii(&self, x: u32, y: u32, char: usize, scale: u32, color: u32) {
-        for (y_offset, row) in (&BASIC_LEGACY[char]).iter().enumerate() {
+        for (y_offset, row) in BASIC_LEGACY[char].iter().enumerate() {
             for bit in 0..8 {
                 match row & (1 << bit) {
                     0 => {}
@@ -238,6 +172,76 @@ impl FrameBuffer {
         for x in 0..self.pitch as i32 {
             let y = f(x as u32);
             self.draw_pixel((x + x_offset) as u32, (y + y_offset as f64) as u32, color);
+        }
+    }
+}
+
+impl Default for FrameBuffer {
+    fn default() -> Self {
+        let mut mailbox = Mailbox([0; 36]);
+        mailbox.0[0] = 35 * 4;
+        mailbox.0[1] = 0;
+
+        mailbox.0[2] = SET_PHYSICAL_DISPLAY_WH;
+        mailbox.0[3] = 8;
+        mailbox.0[4] = 8;
+        mailbox.0[5] = 1920;
+        mailbox.0[6] = 1080;
+
+        mailbox.0[7] = SET_VIRTUAL_DISPLAY_WH;
+        mailbox.0[8] = 8;
+        mailbox.0[9] = 8;
+        mailbox.0[10] = 1920;
+        mailbox.0[11] = 1080;
+
+        mailbox.0[12] = SET_PIXEL_DEPTH;
+        mailbox.0[13] = 4;
+        mailbox.0[14] = 4;
+        mailbox.0[15] = 32; // 32 bit per pixel
+
+        mailbox.0[16] = SET_PIXEL_ORDER;
+        mailbox.0[17] = 4;
+        mailbox.0[18] = 4;
+        mailbox.0[19] = 0x0; // RGB
+
+        mailbox.0[20] = SET_FB_OFFSET;
+        mailbox.0[21] = 8;
+        mailbox.0[22] = 8;
+        mailbox.0[23] = 0; // X in pixels
+        mailbox.0[24] = 0; // Y in pixels
+
+        mailbox.0[25] = ALLOCATE_BUFFER;
+        mailbox.0[26] = 8;
+        mailbox.0[27] = 4;
+        mailbox.0[28] = 4096; // Alignment
+        mailbox.0[29] = 0;
+
+        mailbox.0[30] = GET_PITCH;
+        mailbox.0[31] = 4;
+        mailbox.0[32] = 0;
+        mailbox.0[33] = 0;
+
+        mailbox.0[34] = 0; // End tag
+
+        // TODO: validate responses
+
+        let addr = core::ptr::addr_of!(mailbox.0[0]) as u32;
+
+        write_mailbox(8, addr);
+
+        let _ = read_mailbox(8);
+        if mailbox.0[1] == 0 {
+            println!("Failed");
+        }
+
+        mailbox.0[28] &= 0x3FFFFFFF;
+
+        Self {
+            pixel_depth: mailbox.0[15],
+            pitch: mailbox.0[33] / (mailbox.0[15] / 8),
+            rows: mailbox.0[29] / mailbox.0[33],
+            start_addr: mailbox.0[28] as *mut u32,
+            size: mailbox.0[29],
         }
     }
 }

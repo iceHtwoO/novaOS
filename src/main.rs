@@ -2,17 +2,18 @@
 #![no_std]
 #![feature(asm_experimental_arch)]
 #![allow(static_mut_refs)]
+#![allow(clippy::missing_safety_doc)]
 use core::{
     arch::{asm, global_asm},
-    panic::PanicInfo,
     ptr::write_volatile,
 };
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    heap::{init_global_heap, HEAP},
+    init_heap,
     irq_interrupt::enable_irq_source,
     mailbox::mb_read_soc_temp,
     peripherals::{
@@ -34,15 +35,8 @@ extern "C" {
     static mut __bss_end: u32;
 }
 
-#[panic_handler]
-fn panic(_panic: &PanicInfo) -> ! {
-    loop {
-        println!("Panic");
-    }
-}
-
 #[no_mangle]
-#[link_section = ".text._start"]
+#[cfg_attr(not(test), link_section = ".text._start")]
 pub unsafe extern "C" fn _start() {
     // Set the stack pointer
     asm!(
@@ -88,7 +82,10 @@ unsafe fn zero_bss() {
 pub extern "C" fn kernel_main() -> ! {
     println!("EL: {}", get_current_el());
 
-    heap_test();
+    unsafe {
+        init_heap();
+        heap_test();
+    };
 
     sleep_us(500_000);
 
@@ -98,7 +95,7 @@ pub extern "C" fn kernel_main() -> ! {
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
-    let fb = FrameBuffer::new();
+    let fb = FrameBuffer::default();
 
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);
@@ -116,21 +113,9 @@ pub extern "C" fn kernel_main() -> ! {
     }
 }
 
-fn heap_test() {
-    unsafe {
-        init_global_heap();
-        let a = HEAP.malloc(32).unwrap();
-        let b = HEAP.malloc(64).unwrap();
-        let c = HEAP.malloc(128).unwrap();
-        let _ = HEAP.malloc(256).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(b).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(a).unwrap();
-        HEAP.traverse_heap();
-        HEAP.free(c).unwrap();
-        HEAP.traverse_heap();
-    }
+unsafe fn heap_test() {
+    let b = Box::new([1, 2, 3, 4]);
+    println!("{:?}", b);
 }
 
 fn cos(x: u32) -> f64 {

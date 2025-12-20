@@ -1,9 +1,10 @@
-use crate::{mmio_read, mmio_write, NovaError};
+use crate::{mmio_read, mmio_write};
+use nova_error::NovaError;
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
 
 // MB0
-const MBOX_READ: u32 = MBOX_BASE + 0x00;
+const MBOX_READ: u32 = MBOX_BASE;
 const MBOX_STATUS: u32 = MBOX_BASE + 0x18;
 
 // MB1
@@ -51,7 +52,7 @@ macro_rules! mailbox_command {
                 return Err(NovaError::Mailbox);
             }
 
-            let mut out = [0u32; $response_len / 4]; // TODO: Can this be improved?
+            let mut out = [0u32; $response_len / 4];
             out.copy_from_slice(&mailbox[5..(5 + $response_len / 4)]);
             Ok(out)
         }

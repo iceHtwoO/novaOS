@@ -170,7 +170,7 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
     mmio_write(register_addr, new_val);
 }
 
-pub fn blink_gpio(gpio: u8, duration_ms: u32) {
+pub fn blink_gpio(gpio: u8, duration_ms: u64) {
     let _ = gpio_high(gpio);
 
     sleep_ms(duration_ms);

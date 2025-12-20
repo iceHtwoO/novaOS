@@ -14,3 +14,11 @@ panic = "abort"
 
 [dependencies]
 libm = "0.2.15"
+heap = {path = "heap"}
+nova_error = {path = "nova_error"}
+
+[workspace]
+
+members = [ "nova_error",
+    "heap"
+]
