@@ -6,7 +6,6 @@ use core::{
 use crate::{
     mmio_read, mmio_write,
     peripherals::gpio::{blink_gpio, SpecificGpio},
-    print,
     timer::sleep_s,
 };
 

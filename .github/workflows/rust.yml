@@ -21,8 +21,7 @@ jobs:
       - name: Run format check
         run: cargo fmt --check
       - name: Run lint
-        run: cargo clippy -- -D warnings
-
+        run: cargo clippy --target aarch64-unknown-none -- -D warnings
   build:
     runs-on: ubuntu-latest
 
@@ -33,4 +32,16 @@ jobs:
       - name: Add AArch64 Target
         run: rustup target add aarch64-unknown-none
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --verbose --target aarch64-unknown-none
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rustfmt for nightly
+        run: rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt clippy
+      - name: Add AArch64 Target
+        run: rustup target add aarch64-unknown-none
+      - name: Heap Workspace Test
+        run: cargo test -p heap
