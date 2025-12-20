@@ -1,5 +1,5 @@
 #![no_std]
-
+#![allow(clippy::missing_safety_doc)]
 use core::{
     panic::PanicInfo,
     ptr::{read_volatile, write_volatile},
@@ -19,7 +19,8 @@ pub unsafe fn init_heap() {
     let start = core::ptr::addr_of_mut!(__heap_start) as usize;
     let end = core::ptr::addr_of_mut!(__heap_end) as usize;
 
-    GLOBAL_ALLOCATOR.init(start, end);
+    let heap = core::ptr::addr_of_mut!(GLOBAL_ALLOCATOR);
+    (*heap).init(start, end);
 }
 
 #[panic_handler]

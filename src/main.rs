@@ -2,6 +2,7 @@
 #![no_std]
 #![feature(asm_experimental_arch)]
 #![allow(static_mut_refs)]
+#![allow(clippy::missing_safety_doc)]
 use core::{
     arch::{asm, global_asm},
     ptr::write_volatile,
@@ -94,7 +95,7 @@ pub extern "C" fn kernel_main() -> ! {
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
 
-    let fb = FrameBuffer::new();
+    let fb = FrameBuffer::default();
 
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);

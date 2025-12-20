@@ -15,10 +15,10 @@ panic = "abort"
 [dependencies]
 libm = "0.2.15"
 heap = {path = "heap"}
-NovaError = {path = "NovaError"}
+nova_error = {path = "nova_error"}
 
 [workspace]
 
-members = [ "NovaError",
+members = [ "nova_error",
     "heap"
 ]

@@ -54,7 +54,7 @@ fn esr_uart_dump() {
     let esr: u32;
     unsafe {
         asm!(
-            "mrs {esr}, ESR_EL1",
+            "mrs {esr:x}, ESR_EL1",
             esr = out(reg) esr
         );
     }
@@ -80,6 +80,7 @@ fn handle_gpio_interrupt() {
         let val = read_gpio_event_detect_status(i);
 
         if val {
+            #[allow(clippy::single_match)]
             match i {
                 26 => print!("Button Pressed"),
                 _ => {}

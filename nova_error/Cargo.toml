@@ -1,4 +1,4 @@
 [package]
-name = "NovaError"
+name = "nova_error"
 version = "0.1.0"
 edition = "2024"

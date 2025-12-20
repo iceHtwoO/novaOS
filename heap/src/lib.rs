@@ -9,7 +9,7 @@ use core::{
     result::Result,
 };
 
-use NovaError::NovaError;
+use nova_error::NovaError;
 
 extern crate alloc;
 
@@ -33,8 +33,8 @@ pub struct Heap {
 impl Heap {
     pub const fn empty() -> Self {
         Self {
-            start_address: null_mut() as *mut HeapHeader,
-            end_address: null_mut() as *mut HeapHeader,
+            start_address: null_mut(),
+            end_address: null_mut(),
             raw_size: 0,
         }
     }
@@ -60,11 +60,13 @@ impl Heap {
 
     unsafe fn find_first_fit(&self, size: usize) -> Result<*mut HeapHeader, NovaError> {
         let mut current = self.start_address;
-        while !fits(size, current) {
-            if let Some(next) = (*current).next {
-                current = next;
-            } else {
-                return Err(NovaError::HeapFull);
+        unsafe {
+            while !fits(size, current) {
+                if let Some(next) = (*current).next {
+                    current = next;
+                } else {
+                    return Err(NovaError::HeapFull);
+                }
             }
         }
         Ok(current)
@@ -106,23 +108,22 @@ impl Heap {
         let new_address = unsafe { current.byte_add(byte_offset) };
 
         // Handle case where fragmenting center free space
-        let next = (*current).next;
-        if let Some(next) = next {
-            (*next).before = Some(new_address);
-        }
-
         unsafe {
+            let next = (*current).next;
+            if let Some(next) = next {
+                (*next).before = Some(new_address);
+            }
+
             ptr::write(
-                new_address as *mut HeapHeader,
+                new_address,
                 HeapHeader {
                     next,
                     before: Some(current),
                     size: (*current).size - byte_offset,
                     free: true,
                 },
-            )
-        };
-        unsafe {
+            );
+
             (*current).next = Some(new_address);
             (*current).free = false;
             (*current).size = size;
@@ -135,21 +136,21 @@ impl Heap {
             // IF prev is free:
             // Delete header, add size to previous and fix pointers.
             // Move Head left
-            if let Some(before_head) = (*segment).before {
-                if (*before_head).free {
-                    (*before_head).size += (*segment).size + HEAP_HEADER_SIZE;
-                    delete_header(segment);
-                    segment = before_head;
-                }
+            if let Some(before_head) = (*segment).before
+                && (*before_head).free
+            {
+                (*before_head).size += (*segment).size + HEAP_HEADER_SIZE;
+                delete_header(segment);
+                segment = before_head;
             }
 
             // IF next is free:
             // Delete next header and merge size, fix pointers
-            if let Some(next_head) = (*segment).next {
-                if (*next_head).free {
-                    (*segment).size += (*next_head).size + HEAP_HEADER_SIZE;
-                    delete_header(next_head);
-                }
+            if let Some(next_head) = (*segment).next
+                && (*next_head).free
+            {
+                (*segment).size += (*next_head).size + HEAP_HEADER_SIZE;
+                delete_header(next_head);
             }
 
             // Neither: Set free
@@ -177,19 +178,21 @@ unsafe impl GlobalAlloc for Heap {
 unsafe impl Sync for Heap {}
 
 unsafe fn fits(size: usize, header: *mut HeapHeader) -> bool {
-    (*header).free && size <= (*header).size
+    unsafe { (*header).free && size <= (*header).size }
 }
 
 unsafe fn delete_header(header: *mut HeapHeader) {
-    let before_opt = (*header).before;
-    let next_opt = (*header).next;
+    unsafe {
+        let before_opt = (*header).before;
+        let next_opt = (*header).next;
 
-    if let Some(before) = before_opt {
-        (*before).next = next_opt;
-    }
+        if let Some(before) = before_opt {
+            (*before).next = next_opt;
+        }
 
-    if let Some(next) = next_opt {
-        (*next).before = before_opt;
+        if let Some(next) = next_opt {
+            (*next).before = before_opt;
+        }
     }
 }
 

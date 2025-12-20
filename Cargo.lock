@@ -3,10 +3,6 @@
 version = 4
 
 [[package]]
-name = "NovaError"
-version = "0.1.0"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -28,7 +24,7 @@ dependencies = [
 name = "heap"
 version = "0.1.0"
 dependencies = [
- "NovaError",
+ "nova_error",
  "rand",
 ]
 
@@ -48,10 +44,14 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 name = "nova"
 version = "0.1.0"
 dependencies = [
- "NovaError",
  "heap",
  "libm",
+ "nova_error",
 ]
+
+[[package]]
+name = "nova_error"
+version = "0.1.0"
 
 [[package]]
 name = "ppv-lite86"
