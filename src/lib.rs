@@ -51,7 +51,6 @@ pub mod peripherals;
 
 pub mod configuration;
 pub mod framebuffer;
-pub mod heap;
 pub mod irq_interrupt;
 pub mod mailbox;
 pub mod timer;
