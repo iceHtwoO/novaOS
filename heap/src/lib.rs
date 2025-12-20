@@ -3,34 +3,27 @@
 
 use core::{
     alloc::GlobalAlloc,
-    default::Default,
     mem::size_of,
     prelude::v1::*,
-    ptr::{self, null_mut, read_volatile},
+    ptr::{self, null_mut},
     result::Result,
 };
 
 use NovaError::NovaError;
 
-#[cfg(not(target_os = "none"))]
-extern crate std;
-
 extern crate alloc;
 
 #[repr(C, align(16))]
+#[derive(Clone, Copy)]
 pub struct HeapHeader {
-    pub next: *mut HeapHeader,
-    before: *mut HeapHeader,
-    pub size: usize,
+    next: Option<*mut HeapHeader>,
+    before: Option<*mut HeapHeader>,
+    size: usize,
     free: bool,
 }
 
 const HEAP_HEADER_SIZE: usize = size_of::<HeapHeader>();
 const MIN_BLOCK_SIZE: usize = 16;
-
-// TODO: This implementation has to be reevaluated when implementing multiprocessing
-// Spinlock could be a solution but has its issues:
-// https://matklad.github.io/2020/01/02/spinlocks-considered-harmful.html
 
 pub struct Heap {
     pub start_address: *mut HeapHeader,
@@ -50,14 +43,14 @@ impl Heap {
         self.start_address = heap_start as *mut HeapHeader;
         self.end_address = heap_end as *mut HeapHeader;
 
-        self.raw_size = heap_end - heap_start;
+        self.raw_size = heap_end - heap_start + 1;
 
         unsafe {
             ptr::write(
                 self.start_address,
                 HeapHeader {
-                    next: null_mut(),
-                    before: null_mut(),
+                    next: None,
+                    before: None,
                     size: self.raw_size - HEAP_HEADER_SIZE,
                     free: true,
                 },
@@ -68,10 +61,11 @@ impl Heap {
     unsafe fn find_first_fit(&self, size: usize) -> Result<*mut HeapHeader, NovaError> {
         let mut current = self.start_address;
         while !fits(size, current) {
-            if (*self.start_address).next.is_null() {
+            if let Some(next) = (*self.start_address).next {
+                current = next;
+            } else {
                 return Err(NovaError::HeapFull);
             }
-            current = (*current).next;
         }
         Ok(current)
     }
@@ -113,8 +107,8 @@ impl Heap {
 
         // Handle case where fragmenting center free space
         let next = (*current).next;
-        if !(*current).next.is_null() {
-            (*next).before = new_address;
+        if let Some(next) = next {
+            (*next).before = Some(new_address);
         }
 
         unsafe {
@@ -122,35 +116,38 @@ impl Heap {
                 new_address as *mut HeapHeader,
                 HeapHeader {
                     next,
-                    before: current,
-                    size: (*current).size - size - HEAP_HEADER_SIZE,
+                    before: Some(current),
+                    size: (*current).size - byte_offset,
                     free: true,
                 },
             )
         };
-        (*current).next = new_address;
+        (*current).next = Some(new_address);
         (*current).free = false;
         (*current).size = size;
     }
 
     pub fn free(&self, pointer: *mut u8) -> Result<(), NovaError> {
-        let mut segment = unsafe { pointer.sub(HEAP_HEADER_SIZE) as *mut HeapHeader };
+        let mut segment = Self::get_header_ref_from_data_pointer(pointer);
         unsafe {
             // IF prev is free:
             // Delete header, add size to previous and fix pointers.
             // Move Head left
-            if !(*segment).before.is_null() && (*(*segment).before).free {
-                let before_head = (*segment).before;
-                (*before_head).size += (*segment).size + HEAP_HEADER_SIZE;
-                delete_header(segment);
-                segment = before_head;
+            if let Some(before_head) = (*segment).before {
+                if (*before_head).free {
+                    (*before_head).size += (*segment).size + HEAP_HEADER_SIZE;
+                    delete_header(segment);
+                    segment = before_head;
+                }
             }
+
             // IF next is free:
             // Delete next header and merge size, fix pointers
-            if !(*segment).next.is_null() && (*(*segment).next).free {
-                let next_head = (*segment).next;
-                (*segment).size += (*next_head).size + HEAP_HEADER_SIZE;
-                delete_header(next_head);
+            if let Some(next_head) = (*segment).next {
+                if (*next_head).free {
+                    (*segment).size += (*next_head).size + HEAP_HEADER_SIZE;
+                    delete_header(next_head);
+                }
             }
 
             // Neither: Set free
@@ -158,6 +155,10 @@ impl Heap {
         }
 
         Ok(())
+    }
+
+    const fn get_header_ref_from_data_pointer(pointer: *mut u8) -> *mut HeapHeader {
+        unsafe { pointer.sub(HEAP_HEADER_SIZE) as *mut HeapHeader }
     }
 }
 
@@ -178,17 +179,17 @@ unsafe fn fits(size: usize, header: *mut HeapHeader) -> bool {
 }
 
 unsafe fn delete_header(header: *mut HeapHeader) {
-    let before = (*header).before;
-    let next = (*header).next;
+    let before_opt = (*header).before;
+    let next_opt = (*header).next;
 
-    if !before.is_null() {
-        (*before).next = next;
+    if let Some(before) = before_opt {
+        (*before).next = next_opt;
     }
 
-    if !next.is_null() {
-        (*next).before = before;
+    if let Some(next) = next_opt {
+        (*next).before = before_opt;
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests;

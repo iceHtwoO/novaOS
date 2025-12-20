@@ -9,6 +9,7 @@ use core::{
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     init_heap,
@@ -23,7 +24,6 @@ use nova::{
     },
     print, println,
     timer::{delay_nops, sleep_us},
-    GLOBAL_ALLOCATOR,
 };
 
 global_asm!(include_str!("vector.S"));
@@ -113,13 +113,8 @@ pub extern "C" fn kernel_main() -> ! {
 }
 
 unsafe fn heap_test() {
-    let a = GLOBAL_ALLOCATOR.malloc(32).unwrap();
-    let b = GLOBAL_ALLOCATOR.malloc(64).unwrap();
-    let c = GLOBAL_ALLOCATOR.malloc(128).unwrap();
-    let _ = GLOBAL_ALLOCATOR.malloc(256).unwrap();
-    GLOBAL_ALLOCATOR.free(b).unwrap();
-    GLOBAL_ALLOCATOR.free(a).unwrap();
-    GLOBAL_ALLOCATOR.free(c).unwrap();
+    let b = Box::new([1, 2, 3, 4]);
+    println!("{:?}", b);
 }
 
 fn cos(x: u32) -> f64 {
