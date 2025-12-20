@@ -61,7 +61,7 @@ impl Heap {
     unsafe fn find_first_fit(&self, size: usize) -> Result<*mut HeapHeader, NovaError> {
         let mut current = self.start_address;
         while !fits(size, current) {
-            if let Some(next) = (*self.start_address).next {
+            if let Some(next) = (*current).next {
                 current = next;
             } else {
                 return Err(NovaError::HeapFull);
@@ -122,9 +122,11 @@ impl Heap {
                 },
             )
         };
-        (*current).next = Some(new_address);
-        (*current).free = false;
-        (*current).size = size;
+        unsafe {
+            (*current).next = Some(new_address);
+            (*current).free = false;
+            (*current).size = size;
+        }
     }
 
     pub fn free(&self, pointer: *mut u8) -> Result<(), NovaError> {

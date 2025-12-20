@@ -88,38 +88,78 @@ fn test_freeing_root() {
         assert_eq!((*root_header).size, root_header_start_size);
         assert!((*root_header).next.is_none());
     }
+}
 
-    fn test_merging_free_sections() {
-        let heap_vector = Box::new([0u8; HEAP_SIZE]);
-        let mut heap = Heap::empty();
-        heap.init(
-            &heap_vector[0] as *const u8 as usize,
-            &heap_vector[HEAP_SIZE - 1] as *const u8 as usize,
+#[test]
+fn test_merging_free_sections() {
+    let heap_vector = Box::new([0u8; HEAP_SIZE]);
+    let mut heap = Heap::empty();
+    heap.init(
+        &heap_vector[0] as *const u8 as usize,
+        &heap_vector[HEAP_SIZE - 1] as *const u8 as usize,
+    );
+
+    let root_header = heap.start_address;
+    let root_header_start_size = unsafe { (*root_header).size };
+
+    let malloc1 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let malloc_header_before = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
+    let malloc2 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let _ = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+
+    unsafe {
+        assert!(heap.free(malloc1).is_ok());
+
+        let malloc_header_free = *Heap::get_header_ref_from_data_pointer(malloc1);
+        assert_ne!(malloc_header_before.free, malloc_header_free.free);
+        assert_eq!(malloc_header_before.size, malloc_header_free.size);
+
+        assert!(heap.free(malloc2).is_ok());
+        let malloc_header_merge = *Heap::get_header_ref_from_data_pointer(malloc1);
+
+        assert!(malloc_header_merge.free);
+        assert_eq!(
+            malloc_header_merge.size,
+            malloc_header_free.size + MIN_BLOCK_SIZE + HEAP_HEADER_SIZE
         );
+    }
+}
 
-        let root_header = heap.start_address;
-        let root_header_start_size = unsafe { (*root_header).size };
+#[test]
+fn test_first_fit() {
+    let heap_vector = Box::new([0u8; HEAP_SIZE]);
+    let mut heap = Heap::empty();
+    heap.init(
+        &heap_vector[0] as *const u8 as usize,
+        &heap_vector[HEAP_SIZE - 1] as *const u8 as usize,
+    );
 
-        let malloc1 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
-        let malloc_header_before = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
-        let malloc2 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
-        let malloc3 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let root_header = heap.start_address;
+    let root_header_start_size = unsafe { (*root_header).size };
 
-        unsafe {
-            assert!(heap.free(malloc1).is_ok());
+    let malloc1 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let malloc2 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let malloc3 = heap.malloc(MIN_BLOCK_SIZE * 3).unwrap();
+    let malloc4 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
 
-            let malloc_header_free = *Heap::get_header_ref_from_data_pointer(malloc1);
-            assert_ne!(malloc_header_before.free, malloc_header_free.free);
-            assert_eq!(malloc_header_before.size, malloc_header_free.size);
+    unsafe {
+        assert!(heap.free(malloc1).is_ok());
+        assert!(heap.free(malloc3).is_ok());
+        let malloc5 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
+        let malloc1_header = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
 
-            assert!(heap.free(malloc2).is_ok());
-            let malloc_header_merge = *Heap::get_header_ref_from_data_pointer(malloc1);
+        // First free block stays empty
+        assert!(malloc1_header.free);
 
-            assert!(malloc_header_merge.free);
-            assert_eq!(
-                malloc_header_merge.size,
-                malloc_header_free.size + MIN_BLOCK_SIZE + HEAP_HEADER_SIZE
-            );
-        }
+        // New allocation takes the first fit aka. malloc3
+        assert_eq!(malloc5, malloc3);
+
+        // If no free slot could be found, append to the end
+        let malloc6 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
+        assert!(malloc6 > malloc4);
+
+        // Malloc7 takes slot of Malloc1
+        let malloc7 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+        assert_eq!(malloc1, malloc7);
     }
 }
