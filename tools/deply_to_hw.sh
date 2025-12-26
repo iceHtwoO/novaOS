@@ -15,7 +15,7 @@ REMOTE_DIR="$TFTP_PATH"
 
 # BUILD
 echo "[*] Building kernel..."
-cargo build --release
+cargo build --release --target aarch64-unknown-none
 
 # CONVERT TO IMG
 echo "[*] Convert kernel elf to img..."

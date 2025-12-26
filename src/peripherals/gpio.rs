@@ -1,5 +1,6 @@
 use core::result::Result;
 use core::result::Result::Ok;
+use core::sync::atomic::{compiler_fence, Ordering};
 
 use crate::timer::{delay_nops, sleep_ms};
 use crate::{mmio_read, mmio_write};
@@ -8,10 +9,11 @@ const GPFSEL_BASE: u32 = 0x3F20_0000;
 const GPSET_BASE: u32 = 0x3F20_001C;
 const GPCLR_BASE: u32 = 0x3F20_0028;
 const GPLEV_BASE: u32 = 0x3F20_0034;
+const GPEDS_BASE: u32 = 0x3F20_0040;
+const GPFEN_BASE: u32 = 0x3F20_0058;
 const GPPUD: u32 = 0x3F20_0094;
 const GPPUDCLK_BASE: u32 = 0x3F20_0098;
 const GPREN_BASE: u32 = 0x3F20_004C;
-const GPFEN_BASE: u32 = 0x3F20_0058;
 
 #[repr(u8)]
 pub enum SpecificGpio {
@@ -48,7 +50,8 @@ pub fn set_gpio_function(gpio: u8, state: GPIOFunction) -> Result<(), &'static s
 
 /// Set the GPIO to high
 ///
-/// Should be used when GPIO function is set to `OUTPUT` via `set_gpio_function`
+/// Should be used when GPIO function is set to `OUTPUT` via `set_gpio_function`,
+/// otherwise setting is ignored
 pub fn gpio_high(gpio: u8) -> Result<(), &'static str> {
     let register_index = gpio / 32;
     let register_offset = gpio % 32;
@@ -119,7 +122,7 @@ fn gpio_pull_up_down(gpio: u8, val: u32) {
     mmio_write(register_addr, 0);
 }
 
-/// Get the current status if falling edge detection is set
+/// Get the current status of the falling edge detection
 pub fn read_falling_edge_detect(gpio: u8) -> bool {
     let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
@@ -128,7 +131,7 @@ pub fn read_falling_edge_detect(gpio: u8) -> bool {
     ((current >> register_offset) & 0b1) != 0
 }
 
-/// Get the current status if falling edge detection is set
+/// Get the current status of the rising edge detection
 pub fn read_rising_edge_detect(gpio: u8) -> bool {
     let register_addr = GPREN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
@@ -169,6 +172,29 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
 
     mmio_write(register_addr, new_val);
 }
+
+/// Returns with the interrupt status of an GPIO.
+///
+/// GPEDS register is used to record level and edge events on the GPIO pins.
+/// When an event is triggered by the GPIO, the corresponding bit will be set to 1.
+pub fn read_gpio_event_detect_status(id: u32) -> bool {
+    let register = GPEDS_BASE + (id / 32) * 4;
+    let register_offset = id % 32;
+
+    let val = mmio_read(register) >> register_offset;
+    (val & 0b1) != 0
+}
+
+/// Resets current interrupt status of a GPIO pin.
+pub fn reset_gpio_event_detect_status(id: u32) {
+    let register = GPEDS_BASE + (id / 32) * 4;
+    let register_offset = id % 32;
+
+    mmio_write(register, 0b1 << register_offset);
+    compiler_fence(Ordering::SeqCst);
+}
+
+// TODO: GPHEN,GPLEN,GPAREN,GPAFEN
 
 pub fn blink_gpio(gpio: u8, duration_ms: u64) {
     let _ = gpio_high(gpio);

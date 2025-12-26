@@ -13,9 +13,9 @@ extern crate alloc;
 use alloc::boxed::Box;
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    init_heap,
-    irq_interrupt::enable_irq_source,
-    mailbox::mb_read_soc_temp,
+    get_current_el, init_heap,
+    irq_interrupt::{daif, enable_irq_source},
+    mailbox,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -24,13 +24,13 @@ use nova::{
         uart::uart_init,
     },
     print, println,
-    timer::{delay_nops, sleep_us},
 };
 
 global_asm!(include_str!("vector.S"));
 
 extern "C" {
     fn el2_to_el1();
+    fn el1_to_el0();
     static mut __bss_start: u32;
     static mut __bss_end: u32;
 }
@@ -57,12 +57,11 @@ pub extern "C" fn main() -> ! {
     // Set ACT Led to Outout
     let _ = set_gpio_function(21, GPIOFunction::Output);
 
-    // Delay so clock speed can stabilize
-    delay_nops(50000);
     println!("Hello World!");
+    println!("Exception level: {}", get_current_el());
 
     unsafe {
-        asm!("mrs x0, SCTLR_EL1");
+        asm!("mrs x0, SCTLR_EL1",);
         el2_to_el1();
     }
 
@@ -80,14 +79,22 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
-    println!("EL: {}", get_current_el());
+    println!("Kernel Main");
+    println!("Exception Level: {}", get_current_el());
+    daif::unmask_all();
 
     unsafe {
         init_heap();
-        heap_test();
+        el1_to_el0();
     };
 
-    sleep_us(500_000);
+    #[allow(clippy::empty_loop)]
+    loop {}
+}
+
+#[no_mangle]
+pub extern "C" fn el0() -> ! {
+    println!("Jumped into EL0");
 
     // Set GPIO 26 to Input
     enable_irq_source(nova::irq_interrupt::IRQState::GpioInt0); //26 is on the first GPIO bank
@@ -106,32 +113,18 @@ pub extern "C" fn kernel_main() -> ! {
     fb.draw_function(cos, 100, 101, RED);
 
     loop {
-        let temp = mb_read_soc_temp([0]).unwrap();
+        let temp = mailbox::read_soc_temp([0]).unwrap();
         println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
-    }
-}
 
-unsafe fn heap_test() {
-    let b = Box::new([1, 2, 3, 4]);
-    println!("{:?}", b);
+        let b = Box::new([1, 2, 3, 4]);
+        println!("{:?}", b);
+    }
 }
 
 fn cos(x: u32) -> f64 {
     libm::cos(x as f64 * 0.1) * 20.0
-}
-
-fn get_current_el() -> u64 {
-    let el: u64;
-    unsafe {
-        asm!(
-            "mrs {el}, CurrentEL",
-            el = out(reg) el,
-            options(nomem, nostack, preserves_flags)
-        );
-    }
-    el >> 2
 }
 
 fn enable_uart() {

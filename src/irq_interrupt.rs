@@ -1,21 +1,16 @@
-use core::{
-    arch::asm,
-    sync::atomic::{compiler_fence, Ordering},
-};
+use core::arch::asm;
 
 use crate::{
+    get_current_el,
+    irq_interrupt::daif::unmask_irq,
     mmio_read, mmio_write,
-    peripherals::gpio::{blink_gpio, SpecificGpio},
-    timer::sleep_s,
+    peripherals::gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
 };
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
 const IRQ_PENDING_BASE: u32 = INTERRUPT_BASE + 0x204;
 const ENABLE_IRQ_BASE: u32 = INTERRUPT_BASE + 0x210;
 const DISABLE_IRQ_BASE: u32 = INTERRUPT_BASE + 0x21C;
-
-// GPIO
-const GPEDS_BASE: u32 = 0x3F20_0040;
 
 #[repr(u32)]
 pub enum IRQState {
@@ -34,22 +29,97 @@ pub enum IRQState {
     UartInt = 57,
 }
 
-#[no_mangle]
-unsafe extern "C" fn irq_handler() {
-    handle_gpio_interrupt();
+/// Representation of the ESR_ELx registers
+///
+///  Reference: D1.10.4
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+struct EsrElX {
+    ec: u32,
+    il: u32,
+    iss: u32,
 }
 
-#[no_mangle]
-unsafe extern "C" fn synchronous_interrupt() {
-    loop {
-        println!("Sync Exception");
-        blink_gpio(SpecificGpio::OnboardLed as u8, 100);
-        esr_uart_dump();
-        sleep_s(200);
+impl From<u32> for EsrElX {
+    fn from(value: u32) -> Self {
+        Self {
+            ec: value >> 26,
+            il: (value >> 25) & 0b1,
+            iss: value & 0x1FFFFFF,
+        }
     }
 }
 
-fn esr_uart_dump() {
+#[no_mangle]
+unsafe extern "C" fn rust_irq_handler() {
+    daif::mask_all();
+    handle_gpio_interrupt();
+    let source_el = get_exception_return_exception_level() >> 2;
+    println!("Source EL: {}", source_el);
+    println!("Current EL: {}", get_current_el());
+    println!("Return register address: {:#x}", get_elr_el1());
+}
+
+#[no_mangle]
+unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
+    daif::mask_all();
+
+    let source_el = get_exception_return_exception_level() >> 2;
+    println!("--------Sync Exception in EL{}--------", source_el);
+    println!("No EL change");
+    println!("Current EL: {}", get_current_el());
+    println!("{:?}", EsrElX::from(get_esr_el1()));
+    println!("Return register address: {:#x}", get_elr_el1());
+    println!("-------------------------------------");
+}
+
+/// Synchronous Exception Handler
+///
+/// Lower Exception level, where the implemented level
+/// immediately lower than the target level is using
+/// AArch64.
+#[no_mangle]
+unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
+    daif::mask_all();
+
+    let source_el = get_exception_return_exception_level() >> 2;
+    println!("--------Sync Exception in EL{}--------", source_el);
+    println!("Exception escalated to EL {}", get_current_el());
+    println!("Current EL: {}", get_current_el());
+    let esr = EsrElX::from(get_esr_el1());
+    println!("{:?}", EsrElX::from(esr));
+    println!("Return register address: {:#x}", get_elr_el1());
+
+    match esr.ec {
+        0b100100 => {
+            println!("Cause: Data Abort from a lower Exception level");
+        }
+        _ => {}
+    }
+    println!("-------------------------------------");
+
+    set_return_to_kernel_main();
+}
+
+fn set_return_to_kernel_main() {
+    unsafe {
+        asm!("ldr x0, =kernel_main", "msr ELR_EL1, x0");
+        asm!("mov x0, #(0b0101)", "msr SPSR_EL1, x0");
+    }
+}
+
+fn get_exception_return_exception_level() -> u32 {
+    let spsr: u32;
+    unsafe {
+        asm!("mrs {0:x}, SPSR_EL1", out(reg) spsr);
+    }
+    spsr & 0b1111
+}
+
+/// Read the syndrome information that caused an exception
+///
+/// ESR = Exception Syndrome Register
+fn get_esr_el1() -> u32 {
     let esr: u32;
     unsafe {
         asm!(
@@ -57,20 +127,21 @@ fn esr_uart_dump() {
             esr = out(reg) esr
         );
     }
-    for i in (0..32).rev() {
-        if ((esr >> i) & 1) == 0 {
-            print!("0");
-        } else {
-            print!("1");
-        }
-        if i % 4 == 0 && i > 0 {
-            print!("_");
-        }
+    esr
+}
 
-        if i == 26 || i == 25 || i == 0 {
-            print!("\n\r");
-        }
+/// Read the return address
+///
+/// ELR = Exception Link Registers
+fn get_elr_el1() -> u32 {
+    let elr: u32;
+    unsafe {
+        asm!(
+            "mrs {esr:x}, ELR_EL1",
+            esr = out(reg) elr
+        );
     }
+    elr
 }
 
 fn handle_gpio_interrupt() {
@@ -81,32 +152,16 @@ fn handle_gpio_interrupt() {
         if val {
             #[allow(clippy::single_match)]
             match i {
-                26 => print!("Button Pressed"),
+                26 => {
+                    println!("Button Pressed");
+                }
                 _ => {}
             }
             // Reset GPIO Interrupt handler by writing a 1
             reset_gpio_event_detect_status(i);
         }
     }
-    enable_irq();
-}
-
-/// Get current interrupt status of a GPIO pin
-pub fn read_gpio_event_detect_status(id: u32) -> bool {
-    let register = GPEDS_BASE + (id / 32) * 4;
-    let register_offset = id % 32;
-
-    let val = mmio_read(register) >> register_offset;
-    (val & 0b1) != 0
-}
-
-/// Resets current interrupt status of a GPIO pin
-pub fn reset_gpio_event_detect_status(id: u32) {
-    let register = GPEDS_BASE + (id / 32) * 4;
-    let register_offset = id % 32;
-
-    mmio_write(register, 0b1 << register_offset);
-    compiler_fence(Ordering::SeqCst);
+    unmask_irq();
 }
 
 /// Enables IRQ Source
@@ -147,16 +202,26 @@ pub fn read_irq_pending(state: IRQState) -> bool {
     ((mmio_read(register) >> register_offset) & 0b1) != 0
 }
 
-/// Clears the IRQ DAIF Mask
-///
-/// Enables IRQ interrupts
-pub fn enable_irq() {
-    unsafe { asm!("msr DAIFClr, #0x2") }
-}
+pub mod daif {
+    use core::arch::asm;
 
-/// Clears the IRQ DAIF Mask
-///
-/// Disable IRQ interrupts
-pub fn disable_irq() {
-    unsafe { asm!("msr DAIFSet, #0x2") }
+    #[inline(always)]
+    pub fn mask_all() {
+        unsafe { asm!("msr DAIFSet, #0xf", options(nomem, nostack)) }
+    }
+
+    #[inline(always)]
+    pub fn unmask_all() {
+        unsafe { asm!("msr DAIFClr, #0xf", options(nomem, nostack)) }
+    }
+
+    #[inline(always)]
+    pub fn mask_irq() {
+        unsafe { asm!("msr DAIFSet, #0x2", options(nomem, nostack)) }
+    }
+
+    #[inline(always)]
+    pub fn unmask_irq() {
+        unsafe { asm!("msr DAIFClr, #0x2", options(nomem, nostack)) }
+    }
 }

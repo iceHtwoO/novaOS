@@ -15,7 +15,7 @@ extern crate alloc;
 
 #[repr(C, align(16))]
 #[derive(Clone, Copy)]
-pub struct HeapHeader {
+struct HeapHeader {
     next: Option<*mut HeapHeader>,
     before: Option<*mut HeapHeader>,
     size: usize,
@@ -26,9 +26,9 @@ const HEAP_HEADER_SIZE: usize = size_of::<HeapHeader>();
 const MIN_BLOCK_SIZE: usize = 16;
 
 pub struct Heap {
-    pub start_address: *mut HeapHeader,
-    pub end_address: *mut HeapHeader,
-    pub raw_size: usize,
+    start_address: *mut HeapHeader,
+    end_address: *mut HeapHeader,
+    raw_size: usize,
 }
 impl Heap {
     pub const fn empty() -> Self {
@@ -72,7 +72,7 @@ impl Heap {
         Ok(current)
     }
 
-    pub fn malloc(&self, mut size: usize) -> Result<*mut u8, NovaError> {
+    fn malloc(&self, mut size: usize) -> Result<*mut u8, NovaError> {
         if size == 0 {
             return Err(NovaError::EmptyHeapSegmentNotAllowed);
         }
@@ -130,7 +130,7 @@ impl Heap {
         }
     }
 
-    pub fn free(&self, pointer: *mut u8) -> Result<(), NovaError> {
+    fn free(&self, pointer: *mut u8) -> Result<(), NovaError> {
         let mut segment = Self::get_header_ref_from_data_pointer(pointer);
         unsafe {
             // IF prev is free:

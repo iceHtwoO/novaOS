@@ -27,7 +27,7 @@ macro_rules! max {
 #[macro_export]
 macro_rules! mailbox_command {
     ($name:ident, $tag:expr, $request_len:expr,$response_len:expr) => {
-        /// More information at: https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
+        /// More information at: <https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface>
         pub fn $name(
             request_data: [u32; $request_len / 4],
         ) -> Result<[u32; $response_len / 4], NovaError> {
@@ -59,10 +59,10 @@ macro_rules! mailbox_command {
     };
 }
 
-mailbox_command!(mb_read_soc_temp, 0x0003_0006, 4, 8);
+mailbox_command!(read_soc_temp, 0x0003_0006, 4, 8);
 
 // Framebuffer
-mailbox_command!(mb_get_display_resolution, 0x0004_0003, 0, 8);
+mailbox_command!(get_display_resolution, 0x0004_0003, 0, 8);
 
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty

@@ -27,7 +27,7 @@ SECTIONS {
         KEEP(*(.vector_table))
     }
 
-    .heap 0x8000000 : ALIGN(16)
+    .heap : ALIGN(16)
     {
     __heap_start = .;
     . += 0x10000; #10kB
@@ -39,6 +39,13 @@ SECTIONS {
     __stack_start = .;
     . += 0x10000; #10kB stack
     __stack_end = .;
+    }
+
+    .stack_el0 : ALIGN(16)
+    {
+    __stack_start_el0 = .;
+    . += 0x10000; #10kB stack
+    __stack_end_el0 = .;
     }
 
 
