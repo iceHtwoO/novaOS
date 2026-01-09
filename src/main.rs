@@ -14,17 +14,21 @@ use alloc::boxed::Box;
 use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
-    irq_interrupt::{daif, enable_irq_source},
+    interrupt_handlers::{daif, enable_irq_source, IRQSource},
     mailbox,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
             SpecificGpio,
         },
-        uart::uart_init,
+        uart::{read_uart_data, uart_init},
     },
     print, println,
 };
+
+use crate::uart_term::Terminal;
+
+mod uart_term;
 
 global_asm!(include_str!("vector.S"));
 
@@ -79,6 +83,7 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
+    nova::initialize_kernel();
     println!("Kernel Main");
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
@@ -97,10 +102,12 @@ pub extern "C" fn el0() -> ! {
     println!("Jumped into EL0");
 
     // Set GPIO 26 to Input
-    enable_irq_source(nova::irq_interrupt::IRQState::GpioInt0); //26 is on the first GPIO bank
+    enable_irq_source(IRQSource::GpioInt0); //26 is on the first GPIO bank
     let _ = set_gpio_function(26, GPIOFunction::Input);
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
+
+    enable_irq_source(IRQSource::UartInt);
 
     let fb = FrameBuffer::default();
 
@@ -113,6 +120,7 @@ pub extern "C" fn el0() -> ! {
     fb.draw_function(cos, 100, 101, RED);
 
     loop {
+        read_uart_data();
         let temp = mailbox::read_soc_temp([0]).unwrap();
         println!("{} °C", temp[1] / 1000);
 
@@ -128,8 +136,8 @@ fn cos(x: u32) -> f64 {
 }
 
 fn enable_uart() {
-    uart_init();
     // Set GPIO Pins to UART
     let _ = set_gpio_function(14, GPIOFunction::Alternative0);
     let _ = set_gpio_function(15, GPIOFunction::Alternative0);
+    uart_init();
 }

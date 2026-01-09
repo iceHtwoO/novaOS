@@ -3,7 +3,7 @@ use core::result::Result::Ok;
 use core::sync::atomic::{compiler_fence, Ordering};
 
 use crate::timer::{delay_nops, sleep_ms};
-use crate::{mmio_read, mmio_write};
+use crate::{read_address, write_address};
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;
 const GPSET_BASE: u32 = 0x3F20_001C;
@@ -37,14 +37,14 @@ pub fn set_gpio_function(gpio: u8, state: GPIOFunction) -> Result<(), &'static s
     let register_index = gpio / 10;
     let register_offset = (gpio % 10) * 3;
     let register_addr = GPFSEL_BASE + (register_index as u32 * 4);
-    let current = mmio_read(register_addr);
+    let current = unsafe { read_address(register_addr) };
 
     let mask = !(0b111 << register_offset);
     let cleared = current & mask;
 
     let new_val = cleared | ((state as u32) << register_offset);
 
-    mmio_write(register_addr, new_val);
+    unsafe { write_address(register_addr, new_val) };
     Ok(())
 }
 
@@ -57,7 +57,7 @@ pub fn gpio_high(gpio: u8) -> Result<(), &'static str> {
     let register_offset = gpio % 32;
     let register_addr = GPSET_BASE + (register_index as u32 * 4);
 
-    mmio_write(register_addr, 1 << register_offset);
+    unsafe { write_address(register_addr, 1 << register_offset) };
     Ok(())
 }
 
@@ -69,7 +69,7 @@ pub fn gpio_low(gpio: u8) -> Result<(), &'static str> {
     let register_offset = gpio % 32;
     let register_addr = GPCLR_BASE + (register_index as u32 * 4);
 
-    mmio_write(register_addr, 1 << register_offset);
+    unsafe { write_address(register_addr, 1 << register_offset) };
     Ok(())
 }
 
@@ -79,7 +79,7 @@ pub fn gpio_get_state(gpio: u8) -> u8 {
     let register_offset = gpio % 32;
     let register_addr = GPLEV_BASE + (register_index as u32 * 4);
 
-    let state = mmio_read(register_addr);
+    let state = unsafe { read_address(register_addr) };
     ((state >> register_offset) & 0b1) as u8
 }
 
@@ -103,23 +103,23 @@ fn gpio_pull_up_down(gpio: u8, val: u32) {
     let register_offset = gpio % 32;
 
     // 1. Write Pull up
-    mmio_write(GPPUD, val);
+    unsafe { write_address(GPPUD, val) };
 
     // 2. Delay 150 cycles
     delay_nops(150);
 
     // 3. Write to clock
     let new_val = 0b1 << register_offset;
-    mmio_write(register_addr, new_val);
+    unsafe { write_address(register_addr, new_val) };
 
     // 4. Delay 150 cycles
     delay_nops(150);
 
     // 5. reset GPPUD
-    mmio_write(GPPUD, 0);
+    unsafe { write_address(GPPUD, 0) };
 
     // 6. reset clock
-    mmio_write(register_addr, 0);
+    unsafe { write_address(register_addr, 0) };
 }
 
 /// Get the current status of the falling edge detection
@@ -127,7 +127,7 @@ pub fn read_falling_edge_detect(gpio: u8) -> bool {
     let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
 
-    let current = mmio_read(register_addr);
+    let current = unsafe { read_address(register_addr) };
     ((current >> register_offset) & 0b1) != 0
 }
 
@@ -136,7 +136,7 @@ pub fn read_rising_edge_detect(gpio: u8) -> bool {
     let register_addr = GPREN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
 
-    let current = mmio_read(register_addr);
+    let current = unsafe { read_address(register_addr) };
     ((current >> register_offset) & 0b1) != 0
 }
 
@@ -145,7 +145,7 @@ pub fn set_falling_edge_detect(gpio: u8, enable: bool) {
     let register_addr = GPFEN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
 
-    let current = mmio_read(register_addr);
+    let current = unsafe { read_address(register_addr) };
     let mask = 0b1 << register_offset;
     let new_val = if enable {
         current | mask
@@ -153,7 +153,7 @@ pub fn set_falling_edge_detect(gpio: u8, enable: bool) {
         current & !mask
     };
 
-    mmio_write(register_addr, new_val);
+    unsafe { write_address(register_addr, new_val) };
 }
 
 /// Enables rising edge detection
@@ -161,7 +161,7 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
     let register_addr = GPREN_BASE + 4 * (gpio as u32 / 32);
     let register_offset = gpio % 32;
 
-    let current = mmio_read(register_addr);
+    let current = unsafe { read_address(register_addr) };
 
     let mask = 0b1 << register_offset;
     let new_val = if enable {
@@ -170,7 +170,7 @@ pub fn set_rising_edge_detect(gpio: u8, enable: bool) {
         current & !mask
     };
 
-    mmio_write(register_addr, new_val);
+    unsafe { write_address(register_addr, new_val) };
 }
 
 /// Returns with the interrupt status of an GPIO.
@@ -181,7 +181,7 @@ pub fn read_gpio_event_detect_status(id: u32) -> bool {
     let register = GPEDS_BASE + (id / 32) * 4;
     let register_offset = id % 32;
 
-    let val = mmio_read(register) >> register_offset;
+    let val = unsafe { read_address(register) } >> register_offset;
     (val & 0b1) != 0
 }
 
@@ -190,7 +190,7 @@ pub fn reset_gpio_event_detect_status(id: u32) {
     let register = GPEDS_BASE + (id / 32) * 4;
     let register_offset = id % 32;
 
-    mmio_write(register, 0b1 << register_offset);
+    unsafe { write_address(register, 0b1 << register_offset) };
     compiler_fence(Ordering::SeqCst);
 }
 

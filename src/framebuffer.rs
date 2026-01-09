@@ -4,7 +4,10 @@ mod bitmaps;
 
 use bitmaps::BASIC_LEGACY;
 
-use crate::mailbox::{read_mailbox, write_mailbox};
+use crate::{
+    mailbox::{read_mailbox, write_mailbox},
+    println,
+};
 #[repr(align(16))]
 struct Mailbox([u32; 36]);
 

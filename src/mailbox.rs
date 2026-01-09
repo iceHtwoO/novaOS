@@ -1,4 +1,4 @@
-use crate::{mmio_read, mmio_write};
+use crate::{read_address, write_address};
 use nova_error::NovaError;
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
@@ -67,8 +67,8 @@ mailbox_command!(get_display_resolution, 0x0004_0003, 0, 8);
 pub fn read_mailbox(channel: u32) -> u32 {
     // Wait until mailbox is not empty
     loop {
-        while mmio_read(MBOX_STATUS) & MAIL_EMPTY != 0 {}
-        let mut data = mmio_read(MBOX_READ);
+        while unsafe { read_address(MBOX_STATUS) } & MAIL_EMPTY != 0 {}
+        let mut data = unsafe { read_address(MBOX_READ) };
         let read_channel = data & 0xF;
 
         data >>= 4;
@@ -80,6 +80,6 @@ pub fn read_mailbox(channel: u32) -> u32 {
 }
 
 pub fn write_mailbox(channel: u32, data: u32) {
-    while mmio_read(MBOX_STATUS) & MAIL_FULL != 0 {}
-    mmio_write(MBOX_WRITE, (data & !0xF) | (channel & 0xF));
+    while unsafe { read_address(MBOX_STATUS) } & MAIL_FULL != 0 {}
+    unsafe { write_address(MBOX_WRITE, (data & !0xF) | (channel & 0xF)) };
 }
