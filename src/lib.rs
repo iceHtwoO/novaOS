@@ -6,14 +6,13 @@ extern crate alloc;
 use alloc::boxed::Box;
 use core::{
     arch::asm,
-    fmt,
     panic::PanicInfo,
     ptr::{read_volatile, write_volatile},
 };
 
 use heap::Heap;
 
-use crate::logger::{DefaultLogger, Logger};
+use crate::{interrupt_handlers::initialize_interrupt_handler, logger::DefaultLogger};
 
 static PERIPHERAL_BASE: u32 = 0x3F00_0000;
 
@@ -74,4 +73,5 @@ pub fn get_current_el() -> u64 {
 
 pub fn initialize_kernel() {
     logger::set_logger(Box::new(DefaultLogger));
+    initialize_interrupt_handler();
 }

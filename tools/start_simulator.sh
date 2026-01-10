@@ -6,6 +6,6 @@ llvm-objcopy -O binary ../target/aarch64-unknown-none/release/nova ../target/aar
 qemu-system-aarch64 \
   -M raspi3b \
   -cpu cortex-a53 \
-  -serial pty \
+  -serial stdio \
   -sd ../sd.img \
   -kernel ../target/aarch64-unknown-none/release/kernel8.img

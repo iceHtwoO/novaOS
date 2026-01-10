@@ -1,9 +1,14 @@
 use core::arch::asm;
 
+use alloc::vec::Vec;
+
 use crate::{
     get_current_el,
     interrupt_handlers::daif::unmask_irq,
-    peripherals::gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
+    peripherals::{
+        gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
+        uart::clear_uart_interrupt_state,
+    },
     println, read_address, write_address,
 };
 
@@ -14,6 +19,15 @@ const DISABLE_IRQ_BASE: u32 = INTERRUPT_BASE + 0x21C;
 
 const GPIO_PENDING_BIT_OFFSET: u64 = 0b1111 << 49;
 
+struct InterruptHandlers {
+    source: IRQSource,
+    function: fn(),
+}
+
+// TODO: replace with hashmap and check for better alternatives for option
+static mut INTERRUPT_HANDLERS: Option<Vec<InterruptHandlers>> = None;
+
+#[derive(Clone)]
 #[repr(u32)]
 pub enum IRQSource {
     AuxInt = 29,
@@ -59,11 +73,20 @@ unsafe extern "C" fn rust_irq_handler() {
 
     if pending_irqs & GPIO_PENDING_BIT_OFFSET != 0 {
         handle_gpio_interrupt();
+        let source_el = get_exception_return_exception_level() >> 2;
+        println!("Source EL: {}", source_el);
+        println!("Current EL: {}", get_current_el());
+        println!("Return register address: {:#x}", get_elr_el1());
     }
-    let source_el = get_exception_return_exception_level() >> 2;
-    println!("Source EL: {}", source_el);
-    println!("Current EL: {}", get_current_el());
-    println!("Return register address: {:#x}", get_elr_el1());
+
+    if let Some(handler_vec) = unsafe { INTERRUPT_HANDLERS.as_ref() } {
+        for handler in handler_vec {
+            if (pending_irqs & (1 << (handler.source.clone() as u32))) != 0 {
+                (handler.function)();
+                clear_interrupt_for_source(handler.source.clone());
+            }
+        }
+    }
 }
 
 #[no_mangle]
@@ -105,6 +128,13 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
     println!("-------------------------------------");
 
     set_return_to_kernel_main();
+}
+
+fn clear_interrupt_for_source(source: IRQSource) {
+    match source {
+        IRQSource::UartInt => clear_uart_interrupt_state(),
+        _ => {}
+    }
 }
 
 fn set_return_to_kernel_main() {
@@ -236,5 +266,15 @@ pub mod daif {
     #[inline(always)]
     pub fn unmask_irq() {
         unsafe { asm!("msr DAIFClr, #0x2", options(nomem, nostack)) }
+    }
+}
+
+pub fn initialize_interrupt_handler() {
+    unsafe { INTERRUPT_HANDLERS = Some(Vec::new()) };
+}
+
+pub fn register_interrupt_handler(source: IRQSource, function: fn()) {
+    if let Some(handler_vec) = unsafe { INTERRUPT_HANDLERS.as_mut() } {
+        handler_vec.push(InterruptHandlers { source, function });
     }
 }

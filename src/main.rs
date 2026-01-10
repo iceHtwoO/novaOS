@@ -15,20 +15,16 @@ use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
     interrupt_handlers::{daif, enable_irq_source, IRQSource},
-    mailbox,
+    log, mailbox,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
             SpecificGpio,
         },
-        uart::{read_uart_data, uart_init},
+        uart::uart_init,
     },
-    print, println,
+    println,
 };
-
-use crate::uart_term::Terminal;
-
-mod uart_term;
 
 global_asm!(include_str!("vector.S"));
 
@@ -120,14 +116,13 @@ pub extern "C" fn el0() -> ! {
     fb.draw_function(cos, 100, 101, RED);
 
     loop {
-        read_uart_data();
         let temp = mailbox::read_soc_temp([0]).unwrap();
-        println!("{} °C", temp[1] / 1000);
+        log!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
 
         let b = Box::new([1, 2, 3, 4]);
-        println!("{:?}", b);
+        log!("{:?}", b);
     }
 }
 

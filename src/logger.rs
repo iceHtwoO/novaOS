@@ -6,41 +6,38 @@ use crate::peripherals::uart;
 
 static mut LOGGER: Option<Box<dyn Logger>> = None;
 
-pub trait Logger: Write + Sync {}
+pub trait Logger: Write + Sync {
+    fn flush(&mut self);
+}
 
 pub struct DefaultLogger;
 
-impl Logger for DefaultLogger {}
+impl Logger for DefaultLogger {
+    fn flush(&mut self) {}
+}
 
 impl Write for DefaultLogger {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        uart::write_str(s)
+        uart::Uart.write_str(s)
     }
 }
 
 #[macro_export]
-macro_rules! print {
+macro_rules! log {
     () => {};
     ($($arg:tt)*) => {
-        $crate::logger::_print(format_args!($($arg)*))
+        $crate::logger::log(format_args!($($arg)*))
     };
 }
 
-pub fn _print(args: fmt::Arguments) {
+pub fn log(args: fmt::Arguments) {
     unsafe {
         if let Some(logger) = LOGGER.as_mut() {
-            logger.write_fmt(args);
+            logger.write_str("\n").unwrap();
+            logger.write_fmt(args).unwrap();
+            logger.flush();
         }
     }
-}
-
-#[macro_export]
-macro_rules! println {
-    () => {};
-    ($($arg:tt)*) => {
-        $crate::print!($($arg)*);
-        $crate::print!("\r\n");
-    };
 }
 
 pub fn set_logger(logger: Box<dyn Logger>) {
