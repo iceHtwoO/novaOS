@@ -14,11 +14,13 @@ panic = "abort"
 
 [dependencies]
 libm = "0.2.15"
-heap = {path = "heap"}
-nova_error = {path = "nova_error"}
+heap = {path = "workspace/heap"}
+nova_error = {path = "workspace/nova_error"}
+paste = "1.0.15"
 
 [workspace]
 
-members = [ "nova_error",
-    "heap"
+members = [
+    "workspace/nova_error",
+    "workspace/heap",
 ]

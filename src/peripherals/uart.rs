@@ -3,7 +3,7 @@ use core::{
     fmt::{self, Write},
 };
 
-use crate::{println, read_address, write_address};
+use crate::{read_address, write_address};
 
 const BAUD: u32 = 115200;
 const UART_CLK: u32 = 48_000_000;

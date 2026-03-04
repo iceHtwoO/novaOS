@@ -12,10 +12,11 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use nova::{
+    aarch64::registers::{daif, read_id_aa64mmfr0_el1, read_tcr_el1},
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
-    interrupt_handlers::{daif, enable_irq_source, IRQSource},
-    log, mailbox,
+    interrupt_handlers::{enable_irq_source, IRQSource},
+    log,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -23,6 +24,7 @@ use nova::{
         },
         uart::uart_init,
     },
+    pi3::mailbox,
     println,
 };
 
@@ -86,6 +88,8 @@ pub extern "C" fn kernel_main() -> ! {
 
     unsafe {
         init_heap();
+        println!("{:b}", read_id_aa64mmfr0_el1());
+        println!("{:b}", read_tcr_el1());
         el1_to_el0();
     };
 

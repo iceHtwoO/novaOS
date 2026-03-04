@@ -41,13 +41,14 @@ fn panic(_panic: &PanicInfo) -> ! {
 
 pub mod peripherals;
 
+pub mod aarch64;
 pub mod configuration;
 pub mod framebuffer;
 pub mod interrupt_handlers;
 pub mod logger;
-pub mod mailbox;
-pub mod power_management;
 pub mod timer;
+
+pub mod pi3;
 
 #[inline(always)]
 pub unsafe fn read_address(address: u32) -> u32 {

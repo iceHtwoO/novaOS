@@ -5,7 +5,7 @@ mod bitmaps;
 use bitmaps::BASIC_LEGACY;
 
 use crate::{
-    mailbox::{read_mailbox, write_mailbox},
+    pi3::mailbox::{read_mailbox, write_mailbox},
     println,
 };
 #[repr(align(16))]

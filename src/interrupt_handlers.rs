@@ -3,8 +3,11 @@ use core::arch::asm;
 use alloc::vec::Vec;
 
 use crate::{
+    aarch64::registers::{
+        daif::{mask_all, unmask_irq},
+        read_esr_el1, read_exception_source_el,
+    },
     get_current_el,
-    interrupt_handlers::daif::unmask_irq,
     peripherals::{
         gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
         uart::clear_uart_interrupt_state,
@@ -68,15 +71,15 @@ impl From<u32> for EsrElX {
 
 #[no_mangle]
 unsafe extern "C" fn rust_irq_handler() {
-    daif::mask_all();
+    mask_all();
     let pending_irqs = get_irq_pending_sources();
 
     if pending_irqs & GPIO_PENDING_BIT_OFFSET != 0 {
         handle_gpio_interrupt();
-        let source_el = get_exception_return_exception_level() >> 2;
+        let source_el = read_exception_source_el() >> 2;
         println!("Source EL: {}", source_el);
         println!("Current EL: {}", get_current_el());
-        println!("Return register address: {:#x}", get_elr_el1());
+        println!("Return register address: {:#x}", read_esr_el1());
     }
 
     if let Some(handler_vec) = unsafe { INTERRUPT_HANDLERS.as_ref() } {
@@ -91,14 +94,14 @@ unsafe extern "C" fn rust_irq_handler() {
 
 #[no_mangle]
 unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
-    daif::mask_all();
+    mask_all();
 
-    let source_el = get_exception_return_exception_level() >> 2;
+    let source_el = read_exception_source_el() >> 2;
     println!("--------Sync Exception in EL{}--------", source_el);
     println!("No EL change");
     println!("Current EL: {}", get_current_el());
-    println!("{:?}", EsrElX::from(get_esr_el1()));
-    println!("Return register address: {:#x}", get_elr_el1());
+    println!("{:?}", EsrElX::from(read_esr_el1()));
+    println!("Return register address: {:#x}", read_esr_el1());
     println!("-------------------------------------");
 }
 
@@ -109,15 +112,15 @@ unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
 /// AArch64.
 #[no_mangle]
 unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
-    daif::mask_all();
+    mask_all();
 
-    let source_el = get_exception_return_exception_level() >> 2;
+    let source_el = read_exception_source_el() >> 2;
     println!("--------Sync Exception in EL{}--------", source_el);
     println!("Exception escalated to EL {}", get_current_el());
     println!("Current EL: {}", get_current_el());
-    let esr = EsrElX::from(get_esr_el1());
+    let esr = EsrElX::from(read_esr_el1());
     println!("{:?}", EsrElX::from(esr));
-    println!("Return register address: {:#x}", get_elr_el1());
+    println!("Return register address: {:#x}", read_esr_el1());
 
     match esr.ec {
         0b100100 => {
@@ -142,42 +145,6 @@ fn set_return_to_kernel_main() {
         asm!("ldr x0, =kernel_main", "msr ELR_EL1, x0");
         asm!("mov x0, #(0b0101)", "msr SPSR_EL1, x0");
     }
-}
-
-fn get_exception_return_exception_level() -> u32 {
-    let spsr: u32;
-    unsafe {
-        asm!("mrs {0:x}, SPSR_EL1", out(reg) spsr);
-    }
-    spsr & 0b1111
-}
-
-/// Read the syndrome information that caused an exception
-///
-/// ESR = Exception Syndrome Register
-fn get_esr_el1() -> u32 {
-    let esr: u32;
-    unsafe {
-        asm!(
-            "mrs {esr:x}, ESR_EL1",
-            esr = out(reg) esr
-        );
-    }
-    esr
-}
-
-/// Read the return address
-///
-/// ELR = Exception Link Registers
-fn get_elr_el1() -> u32 {
-    let elr: u32;
-    unsafe {
-        asm!(
-            "mrs {esr:x}, ELR_EL1",
-            esr = out(reg) elr
-        );
-    }
-    elr
 }
 
 fn handle_gpio_interrupt() {
@@ -243,30 +210,6 @@ pub fn get_irq_pending_sources() -> u64 {
     let mut pending = unsafe { read_address(IRQ_PENDING_BASE + 4) as u64 } << 32;
     pending |= unsafe { read_address(IRQ_PENDING_BASE) as u64 };
     pending
-}
-
-pub mod daif {
-    use core::arch::asm;
-
-    #[inline(always)]
-    pub fn mask_all() {
-        unsafe { asm!("msr DAIFSet, #0xf", options(nomem, nostack)) }
-    }
-
-    #[inline(always)]
-    pub fn unmask_all() {
-        unsafe { asm!("msr DAIFClr, #0xf", options(nomem, nostack)) }
-    }
-
-    #[inline(always)]
-    pub fn mask_irq() {
-        unsafe { asm!("msr DAIFSet, #0x2", options(nomem, nostack)) }
-    }
-
-    #[inline(always)]
-    pub fn unmask_irq() {
-        unsafe { asm!("msr DAIFClr, #0x2", options(nomem, nostack)) }
-    }
 }
 
 pub fn initialize_interrupt_handler() {
