@@ -12,7 +12,10 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use nova::{
-    aarch64::registers::{daif, read_id_aa64mmfr0_el1, read_tcr_el1},
+    aarch64::{
+        mmu::init_translation_table,
+        registers::{daif, read_id_aa64mmfr0_el1},
+    },
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
     interrupt_handlers::{enable_irq_source, IRQSource},
@@ -33,6 +36,7 @@ global_asm!(include_str!("vector.S"));
 extern "C" {
     fn el2_to_el1();
     fn el1_to_el0();
+    fn configure_mmu_el1();
     static mut __bss_start: u32;
     static mut __bss_end: u32;
 }
@@ -63,7 +67,14 @@ pub extern "C" fn main() -> ! {
     println!("Exception level: {}", get_current_el());
 
     unsafe {
-        asm!("mrs x0, SCTLR_EL1",);
+        init_heap();
+        init_translation_table();
+        configure_mmu_el1();
+    };
+
+    println!("AA64 {:064b}", read_id_aa64mmfr0_el1());
+
+    unsafe {
         el2_to_el1();
     }
 
@@ -82,14 +93,10 @@ unsafe fn zero_bss() {
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
     nova::initialize_kernel();
-    println!("Kernel Main");
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
 
     unsafe {
-        init_heap();
-        println!("{:b}", read_id_aa64mmfr0_el1());
-        println!("{:b}", read_tcr_el1());
         el1_to_el0();
     };
 

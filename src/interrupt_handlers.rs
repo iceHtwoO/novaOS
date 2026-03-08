@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use crate::{
     aarch64::registers::{
         daif::{mask_all, unmask_irq},
-        read_esr_el1, read_exception_source_el,
+        read_elr_el1, read_esr_el1, read_exception_source_el,
     },
     get_current_el,
     peripherals::{
@@ -118,15 +118,17 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
     println!("--------Sync Exception in EL{}--------", source_el);
     println!("Exception escalated to EL {}", get_current_el());
     println!("Current EL: {}", get_current_el());
-    let esr = EsrElX::from(read_esr_el1());
-    println!("{:?}", EsrElX::from(esr));
-    println!("Return register address: {:#x}", read_esr_el1());
+    let esr: EsrElX = EsrElX::from(read_esr_el1());
+    println!("{:?}", esr);
+    println!("Return address: {:#x}", read_elr_el1());
 
     match esr.ec {
         0b100100 => {
             println!("Cause: Data Abort from a lower Exception level");
         }
-        _ => {}
+        _ => {
+            println!("Unknown Error Code: {:b}", esr.ec);
+        }
     }
     println!("-------------------------------------");
 
@@ -136,7 +138,9 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
 fn clear_interrupt_for_source(source: IRQSource) {
     match source {
         IRQSource::UartInt => clear_uart_interrupt_state(),
-        _ => {}
+        _ => {
+            todo!()
+        }
     }
 }
 
@@ -212,6 +216,7 @@ pub fn get_irq_pending_sources() -> u64 {
     pending
 }
 
+#[inline(always)]
 pub fn initialize_interrupt_handler() {
     unsafe { INTERRUPT_HANDLERS = Some(Vec::new()) };
 }

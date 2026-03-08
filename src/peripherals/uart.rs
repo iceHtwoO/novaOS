@@ -118,11 +118,13 @@ fn uart_fifo_enable(enable: bool) {
     unsafe { write_address(UART0_LCRH, lcrh) };
 }
 
+#[inline(always)]
 fn uart_enable_rx_interrupt() {
     unsafe { write_address(UART0_IMSC, UART0_IMSC_RXIM) };
 }
 
 /// Set UART word length and set FIFO status
+#[inline(always)]
 fn uart_set_lcrh(wlen: u32, enable_fifo: bool) {
     let mut value = (wlen & 0b11) << 5;
     if enable_fifo {
@@ -131,10 +133,12 @@ fn uart_set_lcrh(wlen: u32, enable_fifo: bool) {
     unsafe { write_address(UART0_LCRH, value) };
 }
 
+#[inline(always)]
 pub fn read_uart_data() -> char {
     (unsafe { read_address(UART0_DR) } & 0xFF) as u8 as char
 }
 
+#[inline(always)]
 pub fn clear_uart_interrupt_state() {
     unsafe {
         write_address(UART0_ICR, 1 << 4);

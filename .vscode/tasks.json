@@ -14,9 +14,38 @@
     {
       "label": "Run QEMU",
       "type": "shell",
-      "command": "llvm-objcopy -O binary target/aarch64-unknown-none/debug/nova target/aarch64-unknown-none/debug/kernel8.img && qemu-system-aarch64 -M raspi3b -cpu cortex-a53 -serial stdio -sd sd.img -kernel ${workspaceFolder}/target/aarch64-unknown-none/debug/kernel8.img -S -s -m 1024",
+      "command": "llvm-objcopy -O binary target/aarch64-unknown-none/debug/nova target/aarch64-unknown-none/debug/kernel8.img && echo Starting QEMU&qemu-system-aarch64 -M raspi3b -cpu cortex-a53 -serial stdio -sd sd.img -kernel ${workspaceFolder}/target/aarch64-unknown-none/debug/kernel8.img -S -s -m 1024",
       "isBackground": true,
-      "dependsOn": ["Build"]
+      "dependsOn": ["Build"],
+      "problemMatcher": {
+                "pattern": {
+                    "regexp": "^(Starting QEMU)",
+                    "line": 1,
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^(Starting QEMU)",
+                    "endsPattern": "^(Starting QEMU)"
+                }
+            }
+    },
+        {
+      "label": "Run QEMU wo window",
+      "type": "shell",
+      "command": "llvm-objcopy -O binary target/aarch64-unknown-none/debug/nova target/aarch64-unknown-none/debug/kernel8.img && echo Starting QEMU&qemu-system-aarch64 -M raspi3b -cpu cortex-a53 -display none -serial stdio -sd sd.img -kernel ${workspaceFolder}/target/aarch64-unknown-none/debug/kernel8.img -S -s -m 1024",
+      "isBackground": true,
+      "dependsOn": ["Build"],
+      "problemMatcher": {
+                "pattern": {
+                    "regexp": "^(Starting QEMU)",
+                    "line": 1,
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^(Starting QEMU)",
+                    "endsPattern": "^(Starting QEMU)"
+                }
+            }
     }
   ]
 }

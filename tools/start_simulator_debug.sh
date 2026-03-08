@@ -1,3 +1,5 @@
+set -e
+
 cargo build --target aarch64-unknown-none
 
 cd "$(dirname "$0")"

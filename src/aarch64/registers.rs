@@ -52,6 +52,8 @@ psr!(SPSR_EL1, u32);
 
 psr!(ELR_EL1, u32);
 
+psr!(SCTLR_EL1, u32);
+
 pub fn read_exception_source_el() -> u32 {
     read_spsr_el1() & 0b1111
 }

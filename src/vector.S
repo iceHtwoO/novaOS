@@ -1,5 +1,5 @@
 
-.global vector_table
+.global v_table
 .extern irq_handler
 
 .macro    ventry    label
@@ -7,7 +7,7 @@
 b    \label
 .endm
 
-.section .vector_table, "ax"
+.section .vector_table  , "ax"
 vector_table:
     ventry .
     ventry .
@@ -21,12 +21,18 @@ vector_table:
 
     ventry synchronous_interrupt_imm_lower_aarch64
     ventry irq_handler
+    ventry .
+    ventry .
+
+    ventry .
+    ventry .
+    ventry .
+    ventry .
 
 
 .align 4
 .global el2_to_el1
 el2_to_el1:
-
     mov x0, #(1 << 31)
     msr HCR_EL2, x0
 
@@ -46,9 +52,13 @@ el2_to_el1:
     adr x0, vector_table
     msr VBAR_EL1, x0
 
-    // Disable MMU
-    ldr x0, =SCTLR_EL1_CONF
-    msr sctlr_el1, x0
+    isb
+
+    adrp x0, SCTLR_EL1_CONF
+    ldr  x1, [x0, :lo12:SCTLR_EL1_CONF]
+    msr SCTLR_EL1, x0
+
+    isb
 
     // SIMD should not be trapped
     mrs x0, CPACR_EL1
@@ -56,8 +66,36 @@ el2_to_el1:
     orr x0,x0, x1
     msr CPACR_EL1,x0
 
+    isb
+
     // Return to EL1
     eret
+
+.align 4
+.global configure_mmu_el1
+configure_mmu_el1:
+    // Configure MMU
+    adrp x0, TCR_EL1_CONF
+    ldr  x1, [x0, :lo12:TCR_EL1_CONF]
+    msr TCR_EL1, x0
+    isb
+
+    // MAIR0: Normal Mem.
+    // MAIR1: Device Mem.
+    mov x0, #0x04FF
+    msr MAIR_EL1, x0
+    isb
+
+    // Configure translation table
+    ldr x0, =__translation_table_l1_start
+    msr TTBR0_EL1, x0
+    msr TTBR1_EL1, x0
+
+    tlbi vmalle1
+    dsb ish
+    isb
+
+    ret
 
 .align 4
 .global el1_to_el0
@@ -74,6 +112,8 @@ el1_to_el0:
     // Set SP_EL1 to stack base
     ldr x0, =__stack_end_el0
     msr SP_EL0, x0
+
+    isb
 
     // Return to EL0
     eret
