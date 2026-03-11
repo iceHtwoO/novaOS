@@ -8,4 +8,5 @@ pub enum NovaError {
     Mailbox,
     HeapFull,
     EmptyHeapSegmentNotAllowed,
+    Paging,
 }

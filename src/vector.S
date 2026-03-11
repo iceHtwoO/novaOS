@@ -56,7 +56,7 @@ el2_to_el1:
 
     adrp x0, SCTLR_EL1_CONF
     ldr  x1, [x0, :lo12:SCTLR_EL1_CONF]
-    msr SCTLR_EL1, x0
+    msr SCTLR_EL1, x1
 
     isb
 
@@ -77,7 +77,7 @@ configure_mmu_el1:
     // Configure MMU
     adrp x0, TCR_EL1_CONF
     ldr  x1, [x0, :lo12:TCR_EL1_CONF]
-    msr TCR_EL1, x0
+    msr TCR_EL1, x1
     isb
 
     // MAIR0: Normal Mem.
@@ -87,9 +87,10 @@ configure_mmu_el1:
     isb
 
     // Configure translation table
-    ldr x0, =__translation_table_l1_start
-    msr TTBR0_EL1, x0
-    msr TTBR1_EL1, x0
+    adrp x0, TRANSLATIONTABLE_TTBR0
+    add  x1, x0, :lo12:TRANSLATIONTABLE_TTBR0
+    msr TTBR0_EL1, x1
+    msr TTBR1_EL1, x1
 
     tlbi vmalle1
     dsb ish

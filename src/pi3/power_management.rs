@@ -3,7 +3,7 @@ use core::ptr::{read_volatile, write_volatile};
 use crate::PERIPHERAL_BASE;
 
 /// Power Management Base
-static PM_BASE: u32 = PERIPHERAL_BASE + 0x10_0000;
+static PM_BASE: u32 = PERIPHERAL_BASE as u32 + 0x10_0000;
 static PM_RSTC: u32 = PM_BASE + 0x1c;
 static PM_WDOG: u32 = PM_BASE + 0x24;
 

@@ -19,7 +19,6 @@ use nova::{
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
     interrupt_handlers::{enable_irq_source, IRQSource},
-    log,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -128,12 +127,12 @@ pub extern "C" fn el0() -> ! {
 
     loop {
         let temp = mailbox::read_soc_temp([0]).unwrap();
-        log!("{} °C", temp[1] / 1000);
+        println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
 
         let b = Box::new([1, 2, 3, 4]);
-        log!("{:?}", b);
+        println!("{:?}", b);
     }
 }
 

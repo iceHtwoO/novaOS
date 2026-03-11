@@ -14,7 +14,7 @@ use heap::Heap;
 
 use crate::{interrupt_handlers::initialize_interrupt_handler, logger::DefaultLogger};
 
-static PERIPHERAL_BASE: u32 = 0x3F00_0000;
+static PERIPHERAL_BASE: usize = 0x3F00_0000;
 
 unsafe extern "C" {
     unsafe static mut __heap_start: u8;
