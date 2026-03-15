@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(asm_experimental_arch)]
 #![allow(static_mut_refs)]
 #![allow(clippy::missing_safety_doc)]
 use core::{

@@ -100,7 +100,7 @@ fn test_merging_free_sections() {
     );
 
     let root_header = heap.start_address;
-    let root_header_start_size = unsafe { (*root_header).size };
+    let _root_header_start_size = unsafe { (*root_header).size };
 
     let malloc1 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
     let malloc_header_before = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
@@ -135,31 +135,29 @@ fn test_first_fit() {
     );
 
     let root_header = heap.start_address;
-    let root_header_start_size = unsafe { (*root_header).size };
+    let _root_header_start_size = unsafe { (*root_header).size };
 
     let malloc1 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
-    let malloc2 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    let _malloc2 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
     let malloc3 = heap.malloc(MIN_BLOCK_SIZE * 3).unwrap();
     let malloc4 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
 
-    unsafe {
-        assert!(heap.free(malloc1).is_ok());
-        assert!(heap.free(malloc3).is_ok());
-        let malloc5 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
-        let malloc1_header = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
+    assert!(heap.free(malloc1).is_ok());
+    assert!(heap.free(malloc3).is_ok());
+    let malloc5 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
+    let malloc1_header = unsafe { *Heap::get_header_ref_from_data_pointer(malloc1) };
 
-        // First free block stays empty
-        assert!(malloc1_header.free);
+    // First free block stays empty
+    assert!(malloc1_header.free);
 
-        // New allocation takes the first fit aka. malloc3
-        assert_eq!(malloc5, malloc3);
+    // New allocation takes the first fit aka. malloc3
+    assert_eq!(malloc5, malloc3);
 
-        // If no free slot could be found, append to the end
-        let malloc6 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
-        assert!(malloc6 > malloc4);
+    // If no free slot could be found, append to the end
+    let malloc6 = heap.malloc(MIN_BLOCK_SIZE * 2).unwrap();
+    assert!(malloc6 > malloc4);
 
-        // Malloc7 takes slot of Malloc1
-        let malloc7 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
-        assert_eq!(malloc1, malloc7);
-    }
+    // Malloc7 takes slot of Malloc1
+    let malloc7 = heap.malloc(MIN_BLOCK_SIZE).unwrap();
+    assert_eq!(malloc1, malloc7);
 }

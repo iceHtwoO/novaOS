@@ -82,7 +82,7 @@ unsafe extern "C" fn rust_irq_handler() {
         println!("Return register address: {:#x}", read_esr_el1());
     }
 
-    if let Some(handler_vec) = unsafe { INTERRUPT_HANDLERS.as_ref() } {
+    if let Some(handler_vec) = unsafe { &*core::ptr::addr_of_mut!(INTERRUPT_HANDLERS) } {
         for handler in handler_vec {
             if (pending_irqs & (1 << (handler.source.clone() as u32))) != 0 {
                 (handler.function)();
@@ -222,7 +222,7 @@ pub fn initialize_interrupt_handler() {
 }
 
 pub fn register_interrupt_handler(source: IRQSource, function: fn()) {
-    if let Some(handler_vec) = unsafe { INTERRUPT_HANDLERS.as_mut() } {
+    if let Some(handler_vec) = unsafe { &mut *core::ptr::addr_of_mut!(INTERRUPT_HANDLERS) } {
         handler_vec.push(InterruptHandlers { source, function });
     }
 }

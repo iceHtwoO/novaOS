@@ -59,7 +59,7 @@ pub mod mmu {
             let _ = map_l2_block(
                 addr,
                 addr,
-                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | READ_ONLY | NORMAL_MEM,
             );
         }
@@ -68,7 +68,7 @@ pub mod mmu {
             let _ = map_l2_block(
                 addr,
                 addr,
-                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 WRITABLE | UXN | NORMAL_MEM,
             );
         }
@@ -77,7 +77,7 @@ pub mod mmu {
             let _ = map_l2_block(
                 addr,
                 addr,
-                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | WRITABLE | PXN | NORMAL_MEM,
             );
         }
@@ -86,7 +86,7 @@ pub mod mmu {
             let _ = alloc_block_l2_explicit(
                 addr,
                 addr,
-                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | WRITABLE | UXN | PXN | DEVICE_MEM,
             );
         }

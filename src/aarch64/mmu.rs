@@ -1,4 +1,4 @@
-use core::{panic, u64::MAX};
+use core::panic;
 
 use nova_error::NovaError;
 
@@ -41,7 +41,7 @@ pub const LEVEL2_BLOCK_SIZE: usize = TABLE_ENTRY_COUNT * GRANULARITY;
 
 const L2_BLOCK_BITMAP_WORDS: usize = LEVEL2_BLOCK_SIZE / (64 * GRANULARITY);
 
-const MAX_PAGE_COUNT: usize = 1 * 1024 * 1024 * 1024 / GRANULARITY;
+const MAX_PAGE_COUNT: usize = 1024 * 1024 * 1024 / GRANULARITY;
 #[repr(align(4096))]
 pub struct PageTable([u64; TABLE_ENTRY_COUNT]);
 
@@ -56,7 +56,7 @@ pub fn allocate_memory(
     mut size: usize,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    if virtual_address % GRANULARITY != 0 {
+    if !virtual_address.is_multiple_of(GRANULARITY) {
         return Err(NovaError::Misalignment);
     }
 
@@ -65,7 +65,7 @@ pub fn allocate_memory(
     let level2_blocks = size / LEVEL2_BLOCK_SIZE;
     size %= LEVEL2_BLOCK_SIZE;
     let level3_pages = size / GRANULARITY;
-    if size % GRANULARITY != 0 {
+    if !size.is_multiple_of(GRANULARITY) {
         return Err(NovaError::InvalidGranularity);
     }
 
@@ -74,23 +74,19 @@ pub fn allocate_memory(
     }
 
     for _ in 0..level2_blocks {
-        unsafe {
-            alloc_block_l2(
-                virtual_address,
-                &mut TRANSLATIONTABLE_TTBR0,
-                additional_flags,
-            )?;
-        }
+        alloc_block_l2(
+            virtual_address,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
+            additional_flags,
+        )?;
         virtual_address += LEVEL2_BLOCK_SIZE;
     }
     for _ in 0..level3_pages {
-        unsafe {
-            alloc_page(
-                virtual_address,
-                &mut TRANSLATIONTABLE_TTBR0,
-                additional_flags,
-            )?;
-        }
+        alloc_page(
+            virtual_address,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
+            additional_flags,
+        )?;
         virtual_address += GRANULARITY;
     }
 
@@ -98,7 +94,7 @@ pub fn allocate_memory(
 }
 
 /// Allocate a memory block of `size` starting at `virtual_address`,
-/// with explicit `physical_address``.
+/// with explicit physical_address.
 ///
 /// Note: This can be used when mapping predefined regions.
 pub fn allocate_memory_explicit(
@@ -107,7 +103,7 @@ pub fn allocate_memory_explicit(
     mut physical_address: usize,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    if virtual_address % GRANULARITY != 0 {
+    if !virtual_address.is_multiple_of(GRANULARITY) {
         return Err(NovaError::Misalignment);
     }
 
@@ -116,7 +112,7 @@ pub fn allocate_memory_explicit(
     let mut level2_blocks = size / LEVEL2_BLOCK_SIZE;
     size %= LEVEL2_BLOCK_SIZE;
     let mut level3_pages = size / GRANULARITY;
-    if size % GRANULARITY != 0 {
+    if !size.is_multiple_of(GRANULARITY) {
         return Err(NovaError::InvalidGranularity);
     }
 
@@ -135,14 +131,12 @@ pub fn allocate_memory_explicit(
         level3_pages -= l3_diff;
 
         for _ in 0..l3_diff {
-            unsafe {
-                alloc_page_explicit(
-                    virtual_address,
-                    physical_address,
-                    &mut TRANSLATIONTABLE_TTBR0,
-                    additional_flags,
-                )?;
-            }
+            alloc_page_explicit(
+                virtual_address,
+                physical_address,
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
+                additional_flags,
+            )?;
 
             virtual_address += GRANULARITY;
             physical_address += GRANULARITY;
@@ -150,26 +144,22 @@ pub fn allocate_memory_explicit(
     }
 
     for _ in 0..level2_blocks {
-        unsafe {
-            alloc_block_l2_explicit(
-                virtual_address,
-                physical_address,
-                &mut TRANSLATIONTABLE_TTBR0,
-                additional_flags,
-            )?;
-        }
+        alloc_block_l2_explicit(
+            virtual_address,
+            physical_address,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
+            additional_flags,
+        )?;
         virtual_address += LEVEL2_BLOCK_SIZE;
         physical_address += LEVEL2_BLOCK_SIZE;
     }
     for _ in 0..level3_pages {
-        unsafe {
-            alloc_page_explicit(
-                virtual_address,
-                physical_address,
-                &mut TRANSLATIONTABLE_TTBR0,
-                additional_flags,
-            )?;
-        }
+        alloc_page_explicit(
+            virtual_address,
+            physical_address,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
+            additional_flags,
+        )?;
         virtual_address += GRANULARITY;
         physical_address += GRANULARITY;
     }
@@ -180,7 +170,7 @@ pub fn allocate_memory_explicit(
 /// Allocate a singe page.
 pub fn alloc_page(
     virtual_address: usize,
-    base_table: &mut PageTable,
+    base_table: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
     map_page(
@@ -195,7 +185,7 @@ pub fn alloc_page(
 pub fn alloc_page_explicit(
     virtual_address: usize,
     physical_address: usize,
-    base_table: &mut PageTable,
+    base_table: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
     reserve_page_explicit(physical_address)?;
@@ -210,14 +200,15 @@ pub fn alloc_page_explicit(
 fn map_page(
     virtual_address: usize,
     physical_address: usize,
-    base_table: &mut PageTable,
+    base_table_ptr: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
     let (l1_off, l2_off, l3_off) = virtual_address_to_table_offset(virtual_address);
 
     let offsets = [l1_off, l2_off];
 
-    let table = navigate_table(base_table, &offsets)?;
+    let table_ptr = navigate_table(base_table_ptr, &offsets)?;
+    let table = unsafe { &mut *table_ptr };
 
     if table.0[l3_off] & 0b11 > 0 {
         return Err(NovaError::Paging);
@@ -228,43 +219,51 @@ fn map_page(
     Ok(())
 }
 
-/// Allocate a level 2 block.
+// Allocate a level 2 block.
 pub fn alloc_block_l2(
     virtual_addr: usize,
-    base_table: &mut PageTable,
+    base_table_ptr: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    map_l2_block(virtual_addr, reserve_block(), base_table, additional_flags)
+    map_l2_block(
+        virtual_addr,
+        reserve_block(),
+        base_table_ptr,
+        additional_flags,
+    )
 }
 
-/// Allocate a level 2 block, at a explicit `physical_address`.
+// Allocate a level 2 block, at a explicit `physical_address`.
 pub fn alloc_block_l2_explicit(
     virtual_addr: usize,
     physical_address: usize,
-    base_table: &mut PageTable,
+    base_table_ptr: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    if physical_address % LEVEL2_BLOCK_SIZE != 0 {
+    if !physical_address.is_multiple_of(LEVEL2_BLOCK_SIZE) {
         return Err(NovaError::Misalignment);
     }
 
     reserve_block_explicit(physical_address)?;
-    map_l2_block(virtual_addr, physical_address, base_table, additional_flags)
+    map_l2_block(
+        virtual_addr,
+        physical_address,
+        base_table_ptr,
+        additional_flags,
+    )
 }
 
-/// Map a `virtual_address` to a `physical_address`, **WITHOUT** reserving the physical addresses.
-///
-/// # NOTE
-/// Use [`alloc_block_l2_explicit`] instead, **OR** reserve the memory with [`reserve_block_explicit`]
 pub fn map_l2_block(
-    virtual_address: usize,
+    virtual_addr: usize,
     physical_address: usize,
-    base_table: &mut PageTable,
+    base_table_ptr: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_address);
+    let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_addr);
     let offsets = [l1_off];
-    let table = navigate_table(base_table, &offsets)?;
+    let table_ptr = navigate_table(base_table_ptr, &offsets)?;
+
+    let table = unsafe { &mut *table_ptr };
 
     // Verify virtual address is available.
     if table.0[l2_off] & 0b11 != 0 {
@@ -278,7 +277,6 @@ pub fn map_l2_block(
     Ok(())
 }
 
-/// Reserve a physical address range.
 pub fn reserve_range_explicit(
     start_physical_address: usize,
     end_physical_address: usize,
@@ -290,7 +288,7 @@ pub fn reserve_range_explicit(
     size %= LEVEL2_BLOCK_SIZE;
     let l3_pages = size / GRANULARITY;
 
-    if size % GRANULARITY != 0 {
+    if !size.is_multiple_of(GRANULARITY) {
         return Err(NovaError::Misalignment);
     }
 
@@ -337,7 +335,7 @@ fn reserve_page_explicit(physical_address: usize) -> Result<(), NovaError> {
 fn reserve_block() -> usize {
     if let Some(start) = find_contiguous_free_bitmap_words(L2_BLOCK_BITMAP_WORDS) {
         for j in 0..L2_BLOCK_BITMAP_WORDS {
-            unsafe { PAGING_BITMAP[start + j] = MAX };
+            unsafe { PAGING_BITMAP[start + j] = u64::MAX };
         }
         return start * 64 * GRANULARITY;
     }
@@ -345,8 +343,7 @@ fn reserve_block() -> usize {
     panic!("Out of Memory!");
 }
 
-/// Reserve a level 2 block physical address range.
-pub fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
+fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
     let page = physical_address / GRANULARITY;
     for i in 0..L2_BLOCK_BITMAP_WORDS {
         unsafe {
@@ -357,7 +354,7 @@ pub fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> 
     }
     for i in 0..L2_BLOCK_BITMAP_WORDS {
         unsafe {
-            PAGING_BITMAP[(page / 64) + i] = MAX;
+            PAGING_BITMAP[(page / 64) + i] = u64::MAX;
         };
     }
     Ok(())
@@ -380,7 +377,7 @@ fn create_page_descriptor_entry(physical_address: usize, additional_flags: u64) 
 }
 
 fn create_table_descriptor_entry(addr: usize) -> u64 {
-    0 | (addr as u64 & 0x0000_FFFF_FFFF_F000) | TABLE
+    (addr as u64 & 0x0000_FFFF_FFFF_F000) | TABLE
 }
 
 fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize) {
@@ -392,24 +389,25 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
 }
 
 /// Debugging function to navigate the translation tables.
+#[allow(unused_variables)]
 pub fn sim_l3_access(addr: usize) {
     unsafe {
         let entry1 = TRANSLATIONTABLE_TTBR0.0[addr / LEVEL1_BLOCK_SIZE];
         let table2 = &mut *(entry_phys(entry1) as *mut PageTable);
         let entry2 = table2.0[(addr % LEVEL1_BLOCK_SIZE) / LEVEL2_BLOCK_SIZE];
         let table3 = &mut *(entry_phys(entry2) as *mut PageTable);
-        let entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
+        let _entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
     }
 }
 
 /// Navigate the table tree, by following given offsets. This function
 /// allocates new tables if required.
-fn navigate_table<'a>(
-    initial_table: &'a mut PageTable,
-    offsets: &'a [usize],
-) -> Result<&'a mut PageTable, NovaError> {
-    let root_table_ptr = initial_table as *mut PageTable;
-    let mut table = initial_table;
+fn navigate_table(
+    initial_table_ptr: *mut PageTable,
+    offsets: &[usize],
+) -> Result<*mut PageTable, NovaError> {
+    let root_table_ptr = initial_table_ptr;
+    let mut table = initial_table_ptr;
     for offset in offsets {
         table = next_table(table, *offset, root_table_ptr)?;
     }
@@ -420,10 +418,11 @@ fn navigate_table<'a>(
 ///
 /// If table doesn't exit a page will be allocated for it.
 fn next_table(
-    table: &mut PageTable,
+    table_ptr: *mut PageTable,
     offset: usize,
     root_table_ptr: *mut PageTable,
-) -> Result<&mut PageTable, NovaError> {
+) -> Result<*mut PageTable, NovaError> {
+    let table = unsafe { &mut *table_ptr };
     match table.0[offset] & 0b11 {
         0 => {
             let new_table_addr = reserve_page();
@@ -437,10 +436,10 @@ fn next_table(
                 NORMAL_MEM | WRITABLE | PXN | UXN,
             )?;
 
-            Ok(unsafe { &mut *(entry_phys(table.0[offset]) as *mut PageTable) })
+            Ok(entry_phys(table.0[offset]) as *mut PageTable)
         }
-        1 => return Err(NovaError::Paging),
-        3 => Ok(unsafe { &mut *(entry_phys(table.0[offset]) as *mut PageTable) }),
+        1 => Err(NovaError::Paging),
+        3 => Ok(entry_phys(table.0[offset]) as *mut PageTable),
         _ => unreachable!(),
     }
 }

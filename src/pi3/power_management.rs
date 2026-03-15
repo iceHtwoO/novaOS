@@ -23,5 +23,6 @@ pub fn reboot_system() {
             PM_PASSWORD | (pm_rstc_val & PM_RSTC_WRCFG_CLR) | PM_RSTC_WRCFG_FULL_RESET,
         );
     }
+    #[allow(clippy::empty_loop)]
     loop {}
 }
