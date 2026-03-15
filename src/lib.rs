@@ -35,7 +35,7 @@ pub unsafe fn init_heap() {
 #[panic_handler]
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
-        println!("Panic");
+        println!("Panic: {}", _panic.message());
     }
 }
 

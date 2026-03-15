@@ -10,12 +10,15 @@ use core::{
 
 extern crate alloc;
 
-use alloc::boxed::Box;
 use nova::{
     aarch64::{
-        mmu::init_translation_table,
+        mmu::{
+            allocate_memory_explicit, EL0_ACCESSIBLE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, UXN,
+            WRITABLE,
+        },
         registers::{daif, read_id_aa64mmfr0_el1},
     },
+    configuration::mmu::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_heap,
     interrupt_handlers::{enable_irq_source, IRQSource},
@@ -67,7 +70,18 @@ pub extern "C" fn main() -> ! {
 
     unsafe {
         init_heap();
-        init_translation_table();
+
+        initialize_mmu_translation_tables();
+        // Frame Buffer memory range
+        // TODO: this is just temporary
+        // TODO: Investigate why the size is off
+        allocate_memory_explicit(
+            0x3c100000,
+            1080 * 1920 * 4 + LEVEL2_BLOCK_SIZE + LEVEL2_BLOCK_SIZE,
+            0x3c100000,
+            NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
+        )
+        .unwrap();
         configure_mmu_el1();
     };
 
@@ -117,22 +131,22 @@ pub extern "C" fn el0() -> ! {
 
     let fb = FrameBuffer::default();
 
+    for i in 0..1080 {
+        fb.draw_pixel(50, i, RED);
+    }
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);
     fb.draw_square_fill(1000, 800, 1200, 700, BLUE);
     fb.draw_square_fill(900, 100, 800, 150, RED | BLUE);
     fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
 
-    fb.draw_function(cos, 100, 101, RED);
+    fb.draw_function(cos, 0, 101, RED);
 
     loop {
         let temp = mailbox::read_soc_temp([0]).unwrap();
         println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
-
-        let b = Box::new([1, 2, 3, 4]);
-        println!("{:?}", b);
     }
 }
 

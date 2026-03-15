@@ -24,8 +24,8 @@ pub struct FrameBuffer {
     pixel_depth: u32, // Bits per pixel
     pitch: u32,       // Pixel per row
     rows: u32,        // Rows
-    start_addr: *mut u32,
-    size: u32, //Bytes
+    pub start_addr: *mut u32,
+    pub size: u32, //Bytes
 }
 
 pub const RED: u32 = 0x00FF0000;
@@ -37,8 +37,11 @@ pub const YELLOW: u32 = 0x00FFFF00;
 impl FrameBuffer {
     pub fn draw_pixel(&self, x: u32, y: u32, color: u32) {
         let offset = x + y * self.pitch;
+        if x >= self.pitch || y >= self.rows {
+            return;
+        }
         unsafe {
-            write_volatile(self.start_addr.add(offset as usize), color);
+            write_volatile(self.start_addr.byte_add(4 * offset as usize), color);
         }
     }
 

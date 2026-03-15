@@ -8,5 +8,7 @@ pub enum NovaError {
     Mailbox,
     HeapFull,
     EmptyHeapSegmentNotAllowed,
+    Misalignment,
+    InvalidGranularity,
     Paging,
 }

@@ -31,3 +31,64 @@ const AS: u64 = 0b1 << 36; // configure an ASID size of 16 bits
 
 #[no_mangle]
 pub static TCR_EL1_CONF: u64 = IPS | TG0 | TG1 | T0SZ | T1SZ | SH0 | SH1 | EPD1 | AS;
+
+pub mod mmu {
+
+    use crate::{
+        aarch64::mmu::{
+            alloc_block_l2_explicit, map_l2_block, reserve_range_explicit, DEVICE_MEM,
+            EL0_ACCESSIBLE, LEVEL1_BLOCK_SIZE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY,
+            TRANSLATIONTABLE_TTBR0, UXN, WRITABLE,
+        },
+        PERIPHERAL_BASE,
+    };
+    extern "C" {
+        static _data: u64;
+        static _end: u64;
+        static __kernel_end: u64;
+    }
+
+    pub fn initialize_mmu_translation_tables() {
+        let shared_segment_end = unsafe { &_data } as *const _ as usize;
+        let kernel_end = unsafe { &__kernel_end } as *const _ as usize;
+        let user_space_end = unsafe { &_end } as *const _ as usize;
+
+        reserve_range_explicit(0x0, user_space_end).unwrap();
+
+        for addr in (0..shared_segment_end).step_by(LEVEL2_BLOCK_SIZE) {
+            let _ = map_l2_block(
+                addr,
+                addr,
+                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                EL0_ACCESSIBLE | READ_ONLY | NORMAL_MEM,
+            );
+        }
+
+        for addr in (shared_segment_end..kernel_end).step_by(LEVEL2_BLOCK_SIZE) {
+            let _ = map_l2_block(
+                addr,
+                addr,
+                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                WRITABLE | UXN | NORMAL_MEM,
+            );
+        }
+
+        for addr in (kernel_end..user_space_end).step_by(LEVEL2_BLOCK_SIZE) {
+            let _ = map_l2_block(
+                addr,
+                addr,
+                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                EL0_ACCESSIBLE | WRITABLE | PXN | NORMAL_MEM,
+            );
+        }
+
+        for addr in (PERIPHERAL_BASE..LEVEL1_BLOCK_SIZE).step_by(LEVEL2_BLOCK_SIZE) {
+            let _ = alloc_block_l2_explicit(
+                addr,
+                addr,
+                unsafe { &mut TRANSLATIONTABLE_TTBR0 },
+                EL0_ACCESSIBLE | WRITABLE | UXN | PXN | DEVICE_MEM,
+            );
+        }
+    }
+}

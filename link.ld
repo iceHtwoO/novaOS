@@ -49,6 +49,7 @@ SECTIONS {
     __stack_end_el0 = .;
     }
 
+    . = ALIGN(2M);
     _end = .;
 }
 
