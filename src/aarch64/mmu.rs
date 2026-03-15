@@ -13,9 +13,12 @@ const BLOCK: u64 = 0b01;
 const TABLE: u64 = 0b11;
 const PAGE: u64 = 0b11;
 
+/// Allow EL0 to access this section
 pub const EL0_ACCESSIBLE: u64 = 1 << 6;
 
+/// Allow a page or block to be written.
 pub const WRITABLE: u64 = 0 << 7;
+/// Disallow a page or block to be written.
 pub const READ_ONLY: u64 = 1 << 7;
 
 const ACCESS_FLAG: u64 = 1 << 10;
@@ -47,6 +50,7 @@ pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([0; 512]);
 
 static mut PAGING_BITMAP: [u64; MAX_PAGE_COUNT / 64] = [0; MAX_PAGE_COUNT / 64];
 
+/// Allocate a memory block of `size` starting at `virtual_address`.
 pub fn allocate_memory(
     mut virtual_address: usize,
     mut size: usize,
@@ -93,6 +97,10 @@ pub fn allocate_memory(
     Ok(())
 }
 
+/// Allocate a memory block of `size` starting at `virtual_address`,
+/// with explicit `physical_address``.
+///
+/// Note: This can be used when mapping predefined regions.
 pub fn allocate_memory_explicit(
     mut virtual_address: usize,
     mut size: usize,
@@ -169,6 +177,7 @@ pub fn allocate_memory_explicit(
     Ok(())
 }
 
+/// Allocate a singe page.
 pub fn alloc_page(
     virtual_address: usize,
     base_table: &mut PageTable,
@@ -182,6 +191,7 @@ pub fn alloc_page(
     )
 }
 
+/// Allocate a single page at an explicit `physical_address`.
 pub fn alloc_page_explicit(
     virtual_address: usize,
     physical_address: usize,
@@ -218,6 +228,7 @@ fn map_page(
     Ok(())
 }
 
+/// Allocate a level 2 block.
 pub fn alloc_block_l2(
     virtual_addr: usize,
     base_table: &mut PageTable,
@@ -226,6 +237,7 @@ pub fn alloc_block_l2(
     map_l2_block(virtual_addr, reserve_block(), base_table, additional_flags)
 }
 
+/// Allocate a level 2 block, at a explicit `physical_address`.
 pub fn alloc_block_l2_explicit(
     virtual_addr: usize,
     physical_address: usize,
@@ -240,13 +252,17 @@ pub fn alloc_block_l2_explicit(
     map_l2_block(virtual_addr, physical_address, base_table, additional_flags)
 }
 
+/// Map a `virtual_address` to a `physical_address`, **WITHOUT** reserving the physical addresses.
+///
+/// # NOTE
+/// Use [`alloc_block_l2_explicit`] instead, **OR** reserve the memory with [`reserve_block_explicit`]
 pub fn map_l2_block(
-    virtual_addr: usize,
+    virtual_address: usize,
     physical_address: usize,
     base_table: &mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
-    let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_addr);
+    let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_address);
     let offsets = [l1_off];
     let table = navigate_table(base_table, &offsets)?;
 
@@ -261,6 +277,8 @@ pub fn map_l2_block(
 
     Ok(())
 }
+
+/// Reserve a physical address range.
 pub fn reserve_range_explicit(
     start_physical_address: usize,
     end_physical_address: usize,
@@ -327,7 +345,8 @@ fn reserve_block() -> usize {
     panic!("Out of Memory!");
 }
 
-fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
+/// Reserve a level 2 block physical address range.
+pub fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
     let page = physical_address / GRANULARITY;
     for i in 0..L2_BLOCK_BITMAP_WORDS {
         unsafe {
@@ -372,16 +391,19 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
     (l1_off, l2_off, l3_off)
 }
 
+/// Debugging function to navigate the translation tables.
 pub fn sim_l3_access(addr: usize) {
     unsafe {
         let entry1 = TRANSLATIONTABLE_TTBR0.0[addr / LEVEL1_BLOCK_SIZE];
-        let table2 = &mut *(get_table_entry_address(entry1) as *mut PageTable);
+        let table2 = &mut *(entry_phys(entry1) as *mut PageTable);
         let entry2 = table2.0[(addr % LEVEL1_BLOCK_SIZE) / LEVEL2_BLOCK_SIZE];
-        let table3 = &mut *(get_table_entry_address(entry2) as *mut PageTable);
+        let table3 = &mut *(entry_phys(entry2) as *mut PageTable);
         let entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
     }
 }
 
+/// Navigate the table tree, by following given offsets. This function
+/// allocates new tables if required.
 fn navigate_table<'a>(
     initial_table: &'a mut PageTable,
     offsets: &'a [usize],
@@ -394,6 +416,9 @@ fn navigate_table<'a>(
     Ok(table)
 }
 
+/// Get the next table one level down.
+///
+/// If table doesn't exit a page will be allocated for it.
 fn next_table(
     table: &mut PageTable,
     offset: usize,
@@ -412,10 +437,10 @@ fn next_table(
                 NORMAL_MEM | WRITABLE | PXN | UXN,
             )?;
 
-            Ok(unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) })
+            Ok(unsafe { &mut *(entry_phys(table.0[offset]) as *mut PageTable) })
         }
         1 => return Err(NovaError::Paging),
-        3 => Ok(unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) }),
+        3 => Ok(unsafe { &mut *(entry_phys(table.0[offset]) as *mut PageTable) }),
         _ => unreachable!(),
     }
 }
@@ -455,7 +480,8 @@ fn find_contiguous_free_bitmap_words(required_words: usize) -> Option<usize> {
     None
 }
 
+/// Extracts the physical address out of an table entry.
 #[inline]
-fn get_table_entry_address(entry: u64) -> u64 {
+fn entry_phys(entry: u64) -> u64 {
     entry & 0x0000_FFFF_FFFF_F000
 }

@@ -13,8 +13,7 @@ extern crate alloc;
 use nova::{
     aarch64::{
         mmu::{
-            allocate_memory_explicit, sim_l3_access, EL0_ACCESSIBLE, NORMAL_MEM,
-            PXN, UXN, WRITABLE,
+            allocate_memory_explicit, sim_l3_access, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE,
         },
         registers::{daif, read_id_aa64mmfr0_el1},
     },
@@ -74,7 +73,6 @@ pub extern "C" fn main() -> ! {
         initialize_mmu_translation_tables();
         // Frame Buffer memory range
         // TODO: this is just temporary
-        // TODO: Investigate why the size is off
         allocate_memory_explicit(
             0x3c100000,
             1080 * 1920 * 4,
