@@ -11,6 +11,7 @@ unsafe extern "C" {
 
 const BLOCK: u64 = 0b01;
 const TABLE: u64 = 0b11;
+const PAGE: u64 = 0b11;
 
 pub const EL0_ACCESSIBLE: u64 = 1 << 6;
 
@@ -91,6 +92,7 @@ pub fn allocate_memory(
 
     Ok(())
 }
+
 pub fn allocate_memory_explicit(
     mut virtual_address: usize,
     mut size: usize,
@@ -103,15 +105,40 @@ pub fn allocate_memory_explicit(
 
     let level1_blocks = size / LEVEL1_BLOCK_SIZE;
     size %= LEVEL1_BLOCK_SIZE;
-    let level2_blocks = size / LEVEL2_BLOCK_SIZE;
+    let mut level2_blocks = size / LEVEL2_BLOCK_SIZE;
     size %= LEVEL2_BLOCK_SIZE;
-    let level3_pages = size / GRANULARITY;
+    let mut level3_pages = size / GRANULARITY;
     if size % GRANULARITY != 0 {
         return Err(NovaError::InvalidGranularity);
     }
 
     if level1_blocks > 0 {
         todo!("Currently not supported");
+    }
+
+    let l2_alignment = (physical_address % LEVEL2_BLOCK_SIZE) / GRANULARITY;
+    if l2_alignment != 0 {
+        let l3_diff = LEVEL2_BLOCK_SIZE / GRANULARITY - l2_alignment;
+        if l3_diff > level3_pages {
+            level2_blocks -= 1;
+            level3_pages += TABLE_ENTRY_COUNT;
+        }
+
+        level3_pages -= l3_diff;
+
+        for _ in 0..l3_diff {
+            unsafe {
+                alloc_page_explicit(
+                    virtual_address,
+                    physical_address,
+                    &mut TRANSLATIONTABLE_TTBR0,
+                    additional_flags,
+                )?;
+            }
+
+            virtual_address += GRANULARITY;
+            physical_address += GRANULARITY;
+        }
     }
 
     for _ in 0..level2_blocks {
@@ -178,13 +205,15 @@ fn map_page(
 ) -> Result<(), NovaError> {
     let (l1_off, l2_off, l3_off) = virtual_address_to_table_offset(virtual_address);
 
-    let table = navigate_table(base_table, [l1_off, l2_off, 0], 2)?;
+    let offsets = [l1_off, l2_off];
+
+    let table = navigate_table(base_table, &offsets)?;
 
     if table.0[l3_off] & 0b11 > 0 {
         return Err(NovaError::Paging);
     }
 
-    table.0[l3_off] = create_block_descriptor_entry(physical_address, additional_flags);
+    table.0[l3_off] = create_page_descriptor_entry(physical_address, additional_flags);
 
     Ok(())
 }
@@ -203,6 +232,10 @@ pub fn alloc_block_l2_explicit(
     base_table: &mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
+    if physical_address % LEVEL2_BLOCK_SIZE != 0 {
+        return Err(NovaError::Misalignment);
+    }
+
     reserve_block_explicit(physical_address)?;
     map_l2_block(virtual_addr, physical_address, base_table, additional_flags)
 }
@@ -214,8 +247,8 @@ pub fn map_l2_block(
     additional_flags: u64,
 ) -> Result<(), NovaError> {
     let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_addr);
-
-    let table = navigate_table(base_table, [l1_off, 0, 0], 1)?;
+    let offsets = [l1_off];
+    let table = navigate_table(base_table, &offsets)?;
 
     // Verify virtual address is available.
     if table.0[l2_off] & 0b11 != 0 {
@@ -312,8 +345,16 @@ fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
 }
 
 fn create_block_descriptor_entry(physical_address: usize, additional_flags: u64) -> u64 {
-    (physical_address as u64 & 0x0000_FFFF_FFE0_0000)
+    (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
         | BLOCK
+        | ACCESS_FLAG
+        | INNER_SHAREABILITY
+        | additional_flags
+}
+
+fn create_page_descriptor_entry(physical_address: usize, additional_flags: u64) -> u64 {
+    (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
+        | PAGE
         | ACCESS_FLAG
         | INNER_SHAREABILITY
         | additional_flags
@@ -331,39 +372,52 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
     (l1_off, l2_off, l3_off)
 }
 
-fn navigate_table(
-    initial_table: &mut PageTable,
-    offsets: [usize; 3],
-    offsets_size: usize,
-) -> Result<&mut PageTable, NovaError> {
+pub fn sim_l3_access(addr: usize) {
+    unsafe {
+        let entry1 = TRANSLATIONTABLE_TTBR0.0[addr / LEVEL1_BLOCK_SIZE];
+        let table2 = &mut *(get_table_entry_address(entry1) as *mut PageTable);
+        let entry2 = table2.0[(addr % LEVEL1_BLOCK_SIZE) / LEVEL2_BLOCK_SIZE];
+        let table3 = &mut *(get_table_entry_address(entry2) as *mut PageTable);
+        let entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
+    }
+}
+
+fn navigate_table<'a>(
+    initial_table: &'a mut PageTable,
+    offsets: &'a [usize],
+) -> Result<&'a mut PageTable, NovaError> {
     let root_table_ptr = initial_table as *mut PageTable;
     let mut table = initial_table;
-    for i in 0..offsets_size {
-        let offset = offsets[i];
-        match table.0[offset] & 0b11 {
-            0 => {
-                let new_table_addr = reserve_page();
-
-                table.0[offset] = create_table_descriptor_entry(new_table_addr);
-                table =
-                    unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) };
-
-                map_page(
-                    new_table_addr,
-                    new_table_addr,
-                    unsafe { &mut *root_table_ptr },
-                    NORMAL_MEM | WRITABLE | PXN | UXN,
-                )?;
-            }
-            1 => return Err(NovaError::Paging),
-            3 => {
-                table =
-                    unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) }
-            }
-            _ => panic!(),
-        };
+    for offset in offsets {
+        table = next_table(table, *offset, root_table_ptr)?;
     }
     Ok(table)
+}
+
+fn next_table(
+    table: &mut PageTable,
+    offset: usize,
+    root_table_ptr: *mut PageTable,
+) -> Result<&mut PageTable, NovaError> {
+    match table.0[offset] & 0b11 {
+        0 => {
+            let new_table_addr = reserve_page();
+
+            table.0[offset] = create_table_descriptor_entry(new_table_addr);
+
+            map_page(
+                new_table_addr,
+                new_table_addr,
+                unsafe { &mut *root_table_ptr },
+                NORMAL_MEM | WRITABLE | PXN | UXN,
+            )?;
+
+            Ok(unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) })
+        }
+        1 => return Err(NovaError::Paging),
+        3 => Ok(unsafe { &mut *(get_table_entry_address(table.0[offset]) as *mut PageTable) }),
+        _ => unreachable!(),
+    }
 }
 
 fn find_unallocated_page() -> Option<usize> {

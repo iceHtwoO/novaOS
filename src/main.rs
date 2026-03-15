@@ -13,8 +13,8 @@ extern crate alloc;
 use nova::{
     aarch64::{
         mmu::{
-            allocate_memory_explicit, EL0_ACCESSIBLE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, UXN,
-            WRITABLE,
+            allocate_memory_explicit, sim_l3_access, EL0_ACCESSIBLE, NORMAL_MEM,
+            PXN, UXN, WRITABLE,
         },
         registers::{daif, read_id_aa64mmfr0_el1},
     },
@@ -77,11 +77,12 @@ pub extern "C" fn main() -> ! {
         // TODO: Investigate why the size is off
         allocate_memory_explicit(
             0x3c100000,
-            1080 * 1920 * 4 + LEVEL2_BLOCK_SIZE + LEVEL2_BLOCK_SIZE,
+            1080 * 1920 * 4,
             0x3c100000,
             NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
         )
         .unwrap();
+        sim_l3_access(0x3c100000);
         configure_mmu_el1();
     };
 
@@ -108,7 +109,11 @@ pub extern "C" fn kernel_main() -> ! {
     nova::initialize_kernel();
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
+    let fb = FrameBuffer::default();
 
+    for i in 0..1080 {
+        fb.draw_pixel(50, i, RED);
+    }
     unsafe {
         el1_to_el0();
     };
@@ -131,7 +136,7 @@ pub extern "C" fn el0() -> ! {
 
     let fb = FrameBuffer::default();
 
-    for i in 0..1080 {
+    for i in 600..1080 {
         fb.draw_pixel(50, i, RED);
     }
     fb.draw_square(500, 500, 600, 700, RED);
