@@ -33,6 +33,7 @@ SECTIONS {
     __heap_end = .;
     }
 
+    # EL0 Stack
     .stack ALIGN(16): {
     __stack_start = .;
     . += 10K; #10kB stack

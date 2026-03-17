@@ -45,8 +45,9 @@ el2_to_el1:
     msr ELR_EL2, x0
 
     // Set SP_EL1 to stack base
-    ldr x0, =__stack_end
-    msr SP_EL1, x0
+    adrp x0, EL1_STACK_TOP
+    ldr  x1, [x0, :lo12:EL1_STACK_TOP]
+    msr SP_EL1, x1
 
     // Set VBAR_EL1 to vector table
     adr x0, vector_table

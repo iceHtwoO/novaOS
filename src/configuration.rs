@@ -42,8 +42,9 @@ pub mod mmu {
         PERIPHERAL_BASE,
     };
 
-    const EL1_STACK_END: usize = u64::MAX as usize;
-    const EL1_STACK_START: usize = u64::MAX as usize - LEVEL2_BLOCK_SIZE * 2;
+    #[no_mangle]
+    static EL1_STACK_TOP: usize = 0xFFFF_FFFF_FFFF_FFF0;
+    const EL1_STACK_START: usize = EL1_STACK_TOP - LEVEL2_BLOCK_SIZE * 2;
     extern "C" {
         static _data: u64;
         static _end: u64;
@@ -90,6 +91,17 @@ pub mod mmu {
                 addr,
                 core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | WRITABLE | UXN | PXN | DEVICE_MEM,
+            );
+        }
+
+        for addr in (EL1_STACK_START..EL1_STACK_TOP)
+            .rev()
+            .step_by(LEVEL2_BLOCK_SIZE)
+        {
+            let _ = alloc_block_l2(
+                addr,
+                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1),
+                WRITABLE | NORMAL_MEM,
             );
         }
     }

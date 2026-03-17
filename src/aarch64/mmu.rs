@@ -418,10 +418,9 @@ fn navigate_table(
     initial_table_ptr: *mut PageTable,
     offsets: &[usize],
 ) -> Result<*mut PageTable, NovaError> {
-    let root_table_ptr = initial_table_ptr;
     let mut table = initial_table_ptr;
     for offset in offsets {
-        table = next_table(table, *offset, root_table_ptr)?;
+        table = next_table(table, *offset)?;
     }
     Ok(table)
 }
@@ -429,20 +428,15 @@ fn navigate_table(
 /// Get the next table one level down.
 ///
 /// If table doesn't exit a page will be allocated for it.
-fn next_table(
-    table_ptr: *mut PageTable,
-    offset: usize,
-    root_table_ptr: *mut PageTable,
-) -> Result<*mut PageTable, NovaError> {
+fn next_table(table_ptr: *mut PageTable, offset: usize) -> Result<*mut PageTable, NovaError> {
     let table = unsafe { &mut *table_ptr };
     match table.0[offset] & 0b11 {
         0 => {
             let new_phys_page_table_address = reserve_page();
 
             table.0[offset] = create_table_descriptor_entry(new_phys_page_table_address);
-            let kernel_virt = phys_table_to_kernel_space(new_phys_page_table_address);
             map_page(
-                kernel_virt,
+                phys_table_to_kernel_space(new_phys_page_table_address),
                 new_phys_page_table_address,
                 &raw mut TRANSLATIONTABLE_TTBR1,
                 NORMAL_MEM | WRITABLE | PXN | UXN,
