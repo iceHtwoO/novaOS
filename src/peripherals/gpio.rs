@@ -2,7 +2,7 @@ use core::result::Result;
 use core::result::Result::Ok;
 use core::sync::atomic::{compiler_fence, Ordering};
 
-use crate::timer::{delay_nops, sleep_ms};
+use crate::pi3::timer::{delay_nops, sleep_ms};
 use crate::{read_address, write_address};
 
 const GPFSEL_BASE: u32 = 0x3F20_0000;

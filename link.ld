@@ -10,45 +10,40 @@ SECTIONS {
         *(.rodata .rodata.*)
     }
 
-    .data : {
+    .data ALIGN(2M) : {
         _data = .;
         *(.data .data.*)
     }
 
-    .bss (NOLOAD) : {
-        . = ALIGN(16);
+    .bss ALIGN(16) (NOLOAD) : {
         __bss_start = .;
         *(.bss .bss.*)
-        *(COMMON)
         __bss_end = .;
     }
 
-    .vector_table ALIGN(2048) : {
+    .vector_table ALIGN(2K) : {
         KEEP(*(.vector_table))
     }
 
-    .heap : ALIGN(16)
-    {
-    __heap_start = .;
-    . += 0x10000; #10kB
-    __heap_end = .;
-    }
-
-    .stack : ALIGN(16)
-    {
+    # EL2 Stack
+    .stack ALIGN(16): {
     __stack_start = .;
-    . += 0x10000; #10kB stack
+    . += 100K; #100kB stack
+    . = ALIGN(16);
     __stack_end = .;
     }
 
-    .stack_el0 : ALIGN(16)
-    {
+    . = ALIGN(2M);
+
+    __kernel_end = .;
+
+    .stack_el0 : {
     __stack_start_el0 = .;
-    . += 0x10000; #10kB stack
+    . += 10K; #10kB stack
     __stack_end_el0 = .;
     }
 
-
+    . = ALIGN(2M);
     _end = .;
 }
 

@@ -31,12 +31,10 @@ macro_rules! log {
 }
 
 pub fn log(args: fmt::Arguments) {
-    unsafe {
-        if let Some(logger) = LOGGER.as_mut() {
-            logger.write_str("\n").unwrap();
-            logger.write_fmt(args).unwrap();
-            logger.flush();
-        }
+    if let Some(logger) = unsafe { &mut *core::ptr::addr_of_mut!(LOGGER) } {
+        logger.write_str("\n").unwrap();
+        logger.write_fmt(args).unwrap();
+        logger.flush();
     }
 }
 

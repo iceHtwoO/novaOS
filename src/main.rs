@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![feature(asm_experimental_arch)]
 #![allow(static_mut_refs)]
 #![allow(clippy::missing_safety_doc)]
 use core::{
@@ -10,13 +9,16 @@ use core::{
 
 extern crate alloc;
 
-use alloc::boxed::Box;
+use alloc::vec::Vec;
 use nova::{
-    aarch64::registers::{daif, read_id_aa64mmfr0_el1, read_tcr_el1},
+    aarch64::{
+        mmu::{allocate_memory_explicit, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
+        registers::{daif, read_id_aa64mmfr0_el1},
+    },
+    configuration::mmu::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    get_current_el, init_heap,
+    get_current_el,
     interrupt_handlers::{enable_irq_source, IRQSource},
-    log,
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -29,10 +31,12 @@ use nova::{
 };
 
 global_asm!(include_str!("vector.S"));
+global_asm!(include_str!("config.S"));
 
 extern "C" {
     fn el2_to_el1();
     fn el1_to_el0();
+    fn configure_mmu_el1();
     static mut __bss_start: u32;
     static mut __bss_end: u32;
 }
@@ -63,7 +67,14 @@ pub extern "C" fn main() -> ! {
     println!("Exception level: {}", get_current_el());
 
     unsafe {
-        asm!("mrs x0, SCTLR_EL1",);
+        initialize_mmu_translation_tables();
+        configure_mmu_el1();
+        println!("MMU initialized...");
+    };
+
+    println!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
+    println!("Moving El2->EL1");
+    unsafe {
         el2_to_el1();
     }
 
@@ -81,15 +92,27 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
+    println!("Kernel Start...");
     nova::initialize_kernel();
-    println!("Kernel Main");
+    let mut test_vector = Vec::new();
+    for i in 0..20 {
+        test_vector.push(i);
+    }
+    println!("heap allocation test: {:?}", test_vector);
+
+    // Frame Buffer memory range
+    // TODO: this is just temporary
+    allocate_memory_explicit(
+        0x3c100000,
+        1080 * 1920 * 4,
+        0x3c100000,
+        NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
+    )
+    .unwrap();
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
 
     unsafe {
-        init_heap();
-        println!("{:b}", read_id_aa64mmfr0_el1());
-        println!("{:b}", read_tcr_el1());
         el1_to_el0();
     };
 
@@ -111,22 +134,22 @@ pub extern "C" fn el0() -> ! {
 
     let fb = FrameBuffer::default();
 
+    for i in 0..1080 {
+        fb.draw_pixel(50, i, BLUE);
+    }
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);
     fb.draw_square_fill(1000, 800, 1200, 700, BLUE);
     fb.draw_square_fill(900, 100, 800, 150, RED | BLUE);
     fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
 
-    fb.draw_function(cos, 100, 101, RED);
+    fb.draw_function(cos, 0, 101, RED);
 
     loop {
         let temp = mailbox::read_soc_temp([0]).unwrap();
-        log!("{} °C", temp[1] / 1000);
+        println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
-
-        let b = Box::new([1, 2, 3, 4]);
-        log!("{:?}", b);
     }
 }
 
