@@ -14,8 +14,9 @@ NovaOS is a expository project where I build a kernel from scratch for a Raspber
 - Communicate with peripherals via mailboxes ✓
 - Frame Buffer ✓
 - Heap Memory allocation ✓
-- MMU
+- MMU ✓
 - SVC instructions
+- Kernel Independent Applications
 - Multi Core
 - Dynamic clock speed
 - Multiprocessing
