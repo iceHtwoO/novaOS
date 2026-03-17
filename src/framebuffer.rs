@@ -41,7 +41,7 @@ impl FrameBuffer {
             return;
         }
         unsafe {
-            write_volatile(self.start_addr.byte_add(4 * offset as usize), color);
+            write_volatile(self.start_addr.add(offset as usize), color);
         }
     }
 

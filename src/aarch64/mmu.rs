@@ -1,6 +1,9 @@
 use core::panic;
 
+use core::mem::size_of;
 use nova_error::NovaError;
+
+use crate::get_current_el;
 
 unsafe extern "C" {
     static mut __translation_table_l2_start: u64;
@@ -42,11 +45,16 @@ pub const LEVEL2_BLOCK_SIZE: usize = TABLE_ENTRY_COUNT * GRANULARITY;
 const L2_BLOCK_BITMAP_WORDS: usize = LEVEL2_BLOCK_SIZE / (64 * GRANULARITY);
 
 const MAX_PAGE_COUNT: usize = 1024 * 1024 * 1024 / GRANULARITY;
+
+const TRANSLATION_TABLE_BASE_ADDR: usize = 0xFFFF_FF82_0000_0000;
+const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
 #[repr(align(4096))]
 pub struct PageTable([u64; TABLE_ENTRY_COUNT]);
 
 #[no_mangle]
 pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([0; 512]);
+#[no_mangle]
+pub static mut TRANSLATIONTABLE_TTBR1: PageTable = PageTable([0; 512]);
 
 static mut PAGING_BITMAP: [u64; MAX_PAGE_COUNT / 64] = [0; MAX_PAGE_COUNT / 64];
 
@@ -106,6 +114,9 @@ pub fn allocate_memory_explicit(
     if !virtual_address.is_multiple_of(GRANULARITY) {
         return Err(NovaError::Misalignment);
     }
+    if !physical_address.is_multiple_of(GRANULARITY) {
+        return Err(NovaError::Misalignment);
+    }
 
     let level1_blocks = size / LEVEL1_BLOCK_SIZE;
     size %= LEVEL1_BLOCK_SIZE;
@@ -153,6 +164,7 @@ pub fn allocate_memory_explicit(
         virtual_address += LEVEL2_BLOCK_SIZE;
         physical_address += LEVEL2_BLOCK_SIZE;
     }
+
     for _ in 0..level3_pages {
         alloc_page_explicit(
             virtual_address,
@@ -381,7 +393,7 @@ fn create_table_descriptor_entry(addr: usize) -> u64 {
 }
 
 fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize) {
-    let absolute_page_off = virtual_addr / GRANULARITY;
+    let absolute_page_off = (virtual_addr & !KERNEL_VIRTUAL_MEM_SPACE) / GRANULARITY;
     let l3_off = absolute_page_off % TABLE_ENTRY_COUNT;
     let l2_off = (absolute_page_off / TABLE_ENTRY_COUNT) % TABLE_ENTRY_COUNT;
     let l1_off = (absolute_page_off / TABLE_ENTRY_COUNT / TABLE_ENTRY_COUNT) % TABLE_ENTRY_COUNT;
@@ -393,9 +405,9 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
 pub fn sim_l3_access(addr: usize) {
     unsafe {
         let entry1 = TRANSLATIONTABLE_TTBR0.0[addr / LEVEL1_BLOCK_SIZE];
-        let table2 = &mut *(entry_phys(entry1) as *mut PageTable);
+        let table2 = &mut *(entry_phys(entry1 as usize) as *mut PageTable);
         let entry2 = table2.0[(addr % LEVEL1_BLOCK_SIZE) / LEVEL2_BLOCK_SIZE];
-        let table3 = &mut *(entry_phys(entry2) as *mut PageTable);
+        let table3 = &mut *(entry_phys(entry2 as usize) as *mut PageTable);
         let _entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
     }
 }
@@ -425,21 +437,21 @@ fn next_table(
     let table = unsafe { &mut *table_ptr };
     match table.0[offset] & 0b11 {
         0 => {
-            let new_table_addr = reserve_page();
+            let new_phys_page_table_address = reserve_page();
 
-            table.0[offset] = create_table_descriptor_entry(new_table_addr);
-
+            table.0[offset] = create_table_descriptor_entry(new_phys_page_table_address);
+            let kernel_virt = phys_table_to_kernel_space(new_phys_page_table_address);
             map_page(
-                new_table_addr,
-                new_table_addr,
-                unsafe { &mut *root_table_ptr },
+                kernel_virt,
+                new_phys_page_table_address,
+                &raw mut TRANSLATIONTABLE_TTBR1,
                 NORMAL_MEM | WRITABLE | PXN | UXN,
             )?;
 
-            Ok(entry_phys(table.0[offset]) as *mut PageTable)
+            Ok(entry_table_addr(table.0[offset] as usize) as *mut PageTable)
         }
         1 => Err(NovaError::Paging),
-        3 => Ok(entry_phys(table.0[offset]) as *mut PageTable),
+        3 => Ok(entry_table_addr(table.0[offset] as usize) as *mut PageTable),
         _ => unreachable!(),
     }
 }
@@ -481,6 +493,21 @@ fn find_contiguous_free_bitmap_words(required_words: usize) -> Option<usize> {
 
 /// Extracts the physical address out of an table entry.
 #[inline]
-fn entry_phys(entry: u64) -> u64 {
+fn entry_phys(entry: usize) -> usize {
     entry & 0x0000_FFFF_FFFF_F000
+}
+
+#[inline]
+fn entry_table_addr(entry: usize) -> usize {
+    if get_current_el() == 1 {
+        phys_table_to_kernel_space(entry_phys(entry))
+    } else {
+        entry_phys(entry)
+    }
+}
+
+/// Extracts the physical address out of an table entry.
+#[inline]
+fn phys_table_to_kernel_space(entry: usize) -> usize {
+    entry | TRANSLATION_TABLE_BASE_ADDR
 }

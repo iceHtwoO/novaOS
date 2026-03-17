@@ -23,25 +23,27 @@ const SH0: u64 = 0b11 << 12; // Inner shareable
 
 const TG1: u64 = 0b10 << 30; // 4KB granularity EL1
 const T1SZ: u64 = 25 << 16; // 25 Bits of TTBR select -> 39 Bits of VA
-const EPD1: u64 = 0b1 << 23; // Trigger translation fault when using TTBR1_EL1
 const SH1: u64 = 0b11 << 28; // Inner sharable
 
 const IPS: u64 = 0b000 << 32; // 32 bits of PA space -> up to 4GiB
 const AS: u64 = 0b1 << 36; // configure an ASID size of 16 bits
 
 #[no_mangle]
-pub static TCR_EL1_CONF: u64 = IPS | TG0 | TG1 | T0SZ | T1SZ | SH0 | SH1 | EPD1 | AS;
+pub static TCR_EL1_CONF: u64 = IPS | TG0 | TG1 | T0SZ | T1SZ | SH0 | SH1 | AS;
 
 pub mod mmu {
 
     use crate::{
         aarch64::mmu::{
-            alloc_block_l2_explicit, map_l2_block, reserve_range_explicit, DEVICE_MEM,
-            EL0_ACCESSIBLE, LEVEL1_BLOCK_SIZE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY,
-            TRANSLATIONTABLE_TTBR0, UXN, WRITABLE,
+            alloc_block_l2, alloc_block_l2_explicit, map_l2_block, reserve_range_explicit,
+            DEVICE_MEM, EL0_ACCESSIBLE, LEVEL1_BLOCK_SIZE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN,
+            READ_ONLY, TRANSLATIONTABLE_TTBR0, TRANSLATIONTABLE_TTBR1, UXN, WRITABLE,
         },
         PERIPHERAL_BASE,
     };
+
+    const EL1_STACK_END: usize = u64::MAX as usize;
+    const EL1_STACK_START: usize = u64::MAX as usize - LEVEL2_BLOCK_SIZE * 2;
     extern "C" {
         static _data: u64;
         static _end: u64;

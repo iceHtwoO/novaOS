@@ -11,9 +11,7 @@ extern crate alloc;
 
 use nova::{
     aarch64::{
-        mmu::{
-            allocate_memory_explicit, sim_l3_access, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE,
-        },
+        mmu::{allocate_memory_explicit, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
         registers::{daif, read_id_aa64mmfr0_el1},
     },
     configuration::mmu::initialize_mmu_translation_tables,
@@ -70,21 +68,12 @@ pub extern "C" fn main() -> ! {
         init_heap();
 
         initialize_mmu_translation_tables();
-        // Frame Buffer memory range
-        // TODO: this is just temporary
-        allocate_memory_explicit(
-            0x3c100000,
-            1080 * 1920 * 4,
-            0x3c100000,
-            NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
-        )
-        .unwrap();
-        sim_l3_access(0x3c100000);
         configure_mmu_el1();
+        println!("MMU initialized...");
     };
 
-    println!("AA64 {:064b}", read_id_aa64mmfr0_el1());
-
+    println!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
+    println!("Moving El2->EL1");
     unsafe {
         el2_to_el1();
     }
@@ -104,13 +93,18 @@ unsafe fn zero_bss() {
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
     nova::initialize_kernel();
+    // Frame Buffer memory range
+    // TODO: this is just temporary
+    allocate_memory_explicit(
+        0x3c100000,
+        1080 * 1920 * 4,
+        0x3c100000,
+        NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
+    )
+    .unwrap();
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
-    let fb = FrameBuffer::default();
 
-    for i in 0..1080 {
-        fb.draw_pixel(50, i, RED);
-    }
     unsafe {
         el1_to_el0();
     };
@@ -133,8 +127,8 @@ pub extern "C" fn el0() -> ! {
 
     let fb = FrameBuffer::default();
 
-    for i in 600..1080 {
-        fb.draw_pixel(50, i, RED);
+    for i in 0..1080 {
+        fb.draw_pixel(50, i, BLUE);
     }
     fb.draw_square(500, 500, 600, 700, RED);
     fb.draw_square_fill(800, 800, 900, 900, GREEN);

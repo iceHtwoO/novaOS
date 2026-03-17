@@ -1,5 +1,5 @@
 
-.global v_table
+.global vector_table
 .extern irq_handler
 
 .macro    ventry    label
@@ -90,6 +90,9 @@ configure_mmu_el1:
     adrp x0, TRANSLATIONTABLE_TTBR0
     add  x1, x0, :lo12:TRANSLATIONTABLE_TTBR0
     msr TTBR0_EL1, x1
+
+    adrp x0, TRANSLATIONTABLE_TTBR1
+    add  x1, x0, :lo12:TRANSLATIONTABLE_TTBR1
     msr TTBR1_EL1, x1
 
     tlbi vmalle1
