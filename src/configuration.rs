@@ -36,15 +36,17 @@ pub mod mmu {
     use crate::{
         aarch64::mmu::{
             alloc_block_l2, alloc_block_l2_explicit, map_l2_block, reserve_range_explicit,
-            DEVICE_MEM, EL0_ACCESSIBLE, LEVEL1_BLOCK_SIZE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN,
-            READ_ONLY, TRANSLATIONTABLE_TTBR0, TRANSLATIONTABLE_TTBR1, UXN, WRITABLE,
+            DEVICE_MEM, EL0_ACCESSIBLE, KERNEL_VIRTUAL_MEM_SPACE, LEVEL1_BLOCK_SIZE,
+            LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY, STACK_START_ADDR,
+            TRANSLATIONTABLE_TTBR0, TRANSLATIONTABLE_TTBR1, UXN, WRITABLE,
         },
         PERIPHERAL_BASE,
     };
 
     #[no_mangle]
-    static EL1_STACK_TOP: usize = 0xFFFF_FFFF_FFFF_FFF0;
-    const EL1_STACK_START: usize = EL1_STACK_TOP - LEVEL2_BLOCK_SIZE * 2;
+    static EL1_STACK_TOP: usize = STACK_START_ADDR | KERNEL_VIRTUAL_MEM_SPACE;
+    const EL1_STACK_BOTTOM: usize = EL1_STACK_TOP - LEVEL2_BLOCK_SIZE * 2;
+
     extern "C" {
         static _data: u64;
         static _end: u64;
@@ -94,7 +96,7 @@ pub mod mmu {
             );
         }
 
-        for addr in (EL1_STACK_START..EL1_STACK_TOP)
+        for addr in (EL1_STACK_BOTTOM..EL1_STACK_TOP)
             .rev()
             .step_by(LEVEL2_BLOCK_SIZE)
         {

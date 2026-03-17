@@ -12,24 +12,30 @@ use core::{
 
 use heap::Heap;
 
-use crate::{interrupt_handlers::initialize_interrupt_handler, logger::DefaultLogger};
+use crate::{
+    aarch64::mmu::{
+        allocate_memory, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN, WRITABLE,
+    },
+    interrupt_handlers::initialize_interrupt_handler,
+    logger::DefaultLogger,
+};
 
 static PERIPHERAL_BASE: usize = 0x3F00_0000;
 
 unsafe extern "C" {
-    unsafe static mut __heap_start: u8;
-    unsafe static mut __heap_end: u8;
+    unsafe static mut __kernel_end: u8;
 }
 
 #[global_allocator]
 pub static mut GLOBAL_ALLOCATOR: Heap = Heap::empty();
 
-pub unsafe fn init_heap() {
-    let start = core::ptr::addr_of_mut!(__heap_start) as usize;
-    let end = core::ptr::addr_of_mut!(__heap_end) as usize;
+pub unsafe fn init_kernel_heap() {
+    let start = core::ptr::addr_of_mut!(__kernel_end) as usize | KERNEL_VIRTUAL_MEM_SPACE;
+    let size = LEVEL2_BLOCK_SIZE * 2;
 
+    allocate_memory(start, size, NORMAL_MEM | UXN | WRITABLE).unwrap();
     let heap = core::ptr::addr_of_mut!(GLOBAL_ALLOCATOR);
-    (*heap).init(start, end);
+    (*heap).init(start, start + size);
 }
 
 #[panic_handler]
@@ -46,7 +52,6 @@ pub mod configuration;
 pub mod framebuffer;
 pub mod interrupt_handlers;
 pub mod logger;
-pub mod timer;
 
 pub mod pi3;
 
@@ -73,6 +78,7 @@ pub fn get_current_el() -> u64 {
 }
 
 pub fn initialize_kernel() {
+    unsafe { init_kernel_heap() };
     logger::set_logger(Box::new(DefaultLogger));
     initialize_interrupt_handler();
 }

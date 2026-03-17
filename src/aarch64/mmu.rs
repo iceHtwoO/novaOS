@@ -47,7 +47,10 @@ const L2_BLOCK_BITMAP_WORDS: usize = LEVEL2_BLOCK_SIZE / (64 * GRANULARITY);
 const MAX_PAGE_COUNT: usize = 1024 * 1024 * 1024 / GRANULARITY;
 
 const TRANSLATION_TABLE_BASE_ADDR: usize = 0xFFFF_FF82_0000_0000;
-const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
+pub const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
+
+pub const STACK_START_ADDR: usize = !KERNEL_VIRTUAL_MEM_SPACE & (!0xF);
+
 #[repr(align(4096))]
 pub struct PageTable([u64; TABLE_ENTRY_COUNT]);
 
@@ -81,20 +84,18 @@ pub fn allocate_memory(
         todo!("Currently not supported");
     }
 
+    let base_table = if virtual_address & KERNEL_VIRTUAL_MEM_SPACE > 0 {
+        core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1)
+    } else {
+        core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0)
+    };
+
     for _ in 0..level2_blocks {
-        alloc_block_l2(
-            virtual_address,
-            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-            additional_flags,
-        )?;
+        alloc_block_l2(virtual_address, base_table, additional_flags)?;
         virtual_address += LEVEL2_BLOCK_SIZE;
     }
     for _ in 0..level3_pages {
-        alloc_page(
-            virtual_address,
-            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-            additional_flags,
-        )?;
+        alloc_page(virtual_address, base_table, additional_flags)?;
         virtual_address += GRANULARITY;
     }
 

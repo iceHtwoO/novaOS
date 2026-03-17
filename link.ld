@@ -15,28 +15,21 @@ SECTIONS {
         *(.data .data.*)
     }
 
-    .bss (NOLOAD) : {
-        . = ALIGN(16);
+    .bss ALIGN(16) (NOLOAD) : {
         __bss_start = .;
         *(.bss .bss.*)
-        *(COMMON)
         __bss_end = .;
     }
 
-    .vector_table ALIGN(2048) : {
+    .vector_table ALIGN(2K) : {
         KEEP(*(.vector_table))
     }
 
-    .heap ALIGN(16): {
-    __heap_start = .;
-    . += 100K; #100kB
-    __heap_end = .;
-    }
-
-    # EL0 Stack
+    # EL2 Stack
     .stack ALIGN(16): {
     __stack_start = .;
-    . += 10K; #10kB stack
+    . += 100K; #100kB stack
+    . = ALIGN(16);
     __stack_end = .;
     }
 

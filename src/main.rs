@@ -9,6 +9,7 @@ use core::{
 
 extern crate alloc;
 
+use alloc::vec::Vec;
 use nova::{
     aarch64::{
         mmu::{allocate_memory_explicit, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
@@ -16,7 +17,7 @@ use nova::{
     },
     configuration::mmu::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    get_current_el, init_heap,
+    get_current_el,
     interrupt_handlers::{enable_irq_source, IRQSource},
     peripherals::{
         gpio::{
@@ -30,6 +31,7 @@ use nova::{
 };
 
 global_asm!(include_str!("vector.S"));
+global_asm!(include_str!("config.S"));
 
 extern "C" {
     fn el2_to_el1();
@@ -65,8 +67,6 @@ pub extern "C" fn main() -> ! {
     println!("Exception level: {}", get_current_el());
 
     unsafe {
-        init_heap();
-
         initialize_mmu_translation_tables();
         configure_mmu_el1();
         println!("MMU initialized...");
@@ -92,7 +92,14 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
+    println!("Kernel Start...");
     nova::initialize_kernel();
+    let mut test_vector = Vec::new();
+    for i in 0..20 {
+        test_vector.push(i);
+    }
+    println!("heap allocation test: {:?}", test_vector);
+
     // Frame Buffer memory range
     // TODO: this is just temporary
     allocate_memory_explicit(

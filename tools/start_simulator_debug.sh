@@ -11,6 +11,4 @@ qemu-system-aarch64 \
   -cpu cortex-a53 \
   -serial stdio \
   -sd ../sd.img \
-  -display none \
   -kernel ../target/aarch64-unknown-none/debug/kernel8.img \
-  -s -S
