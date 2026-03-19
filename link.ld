@@ -4,14 +4,15 @@ SECTIONS {
     .text ALIGN(4) : {
         KEEP(*(.text._start))
         *(.text .text.*)
+        . = ALIGN(4K);
+        __text_end = .;
     }
 
     .rodata : {
         *(.rodata .rodata.*)
     }
 
-    .data ALIGN(2M) : {
-        _data = .;
+    .data  : {
         *(.data .data.*)
     }
 
@@ -20,6 +21,10 @@ SECTIONS {
         *(.bss .bss.*)
         __bss_end = .;
     }
+
+    . = ALIGN(2M);
+
+    __share_end = .;
 
     .vector_table ALIGN(2K) : {
         KEEP(*(.vector_table))
@@ -36,15 +41,6 @@ SECTIONS {
     . = ALIGN(2M);
 
     __kernel_end = .;
-
-    .stack_el0 : {
-    __stack_start_el0 = .;
-    . += 10K; #10kB stack
-    __stack_end_el0 = .;
-    }
-
-    . = ALIGN(2M);
-    _end = .;
 }
 
 __bss_size = (__bss_end - __bss_start) >> 3;

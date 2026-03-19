@@ -87,8 +87,9 @@ el1_to_el0:
     msr ELR_EL1, x0
 
     // Set SP_EL1 to stack base
-    ldr x0, =__stack_end_el0
-    msr SP_EL0, x0
+    adrp x0, EL0_STACK_TOP
+    ldr  x1, [x0, :lo12:EL0_STACK_TOP]
+    msr SP_EL0, x1
 
     isb
 

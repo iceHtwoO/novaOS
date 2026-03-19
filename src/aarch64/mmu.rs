@@ -8,13 +8,6 @@ use crate::{
     get_current_el,
 };
 
-unsafe extern "C" {
-    static mut __translation_table_l2_start: u64;
-    static __stack_start_el0: u64;
-    static __kernel_end: u64;
-    static _data: u64;
-}
-
 const BLOCK: u64 = 0b01;
 const TABLE: u64 = 0b11;
 const PAGE: u64 = 0b11;
@@ -111,21 +104,21 @@ fn map_range_explicit(
 
     while virt % LEVEL2_BLOCK_SIZE != 0 {
         map_page(virt, phys, base, flags)?;
-        virt += GRANULARITY;
+        (virt, _) = virt.overflowing_add(GRANULARITY);
         phys += GRANULARITY;
         remaining -= GRANULARITY;
     }
 
     while remaining >= LEVEL2_BLOCK_SIZE {
         map_l2_block(virt, phys, base, flags)?;
-        virt += LEVEL2_BLOCK_SIZE;
+        (virt, _) = virt.overflowing_add(LEVEL2_BLOCK_SIZE);
         phys += LEVEL2_BLOCK_SIZE;
         remaining -= LEVEL2_BLOCK_SIZE;
     }
 
     while remaining > 0 {
         map_page(virt, phys, base, flags)?;
-        virt += GRANULARITY;
+        (virt, _) = virt.overflowing_add(GRANULARITY);
         phys += GRANULARITY;
         remaining -= GRANULARITY;
     }
@@ -143,13 +136,13 @@ fn map_range_dynamic(
 
     while remaining >= LEVEL2_BLOCK_SIZE {
         map_l2_block(virt, reserve_block(), base, flags)?;
-        virt += LEVEL2_BLOCK_SIZE;
+        (virt, _) = virt.overflowing_add(LEVEL2_BLOCK_SIZE);
         remaining -= LEVEL2_BLOCK_SIZE;
     }
 
     while remaining > 0 {
         map_page(virt, reserve_page(), base, flags)?;
-        virt += GRANULARITY;
+        (virt, _) = virt.overflowing_add(GRANULARITY);
         remaining -= GRANULARITY;
     }
 
@@ -186,7 +179,7 @@ pub fn alloc_page_explicit(
     )
 }
 
-fn map_page(
+pub fn map_page(
     virtual_address: usize,
     physical_address: usize,
     base_table_ptr: *mut PageTable,

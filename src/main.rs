@@ -11,10 +11,7 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 use nova::{
-    aarch64::{
-        mmu::{allocate_memory, PhysSource, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
-        registers::{daif, read_id_aa64mmfr0_el1},
-    },
+    aarch64::registers::{daif, read_id_aa64mmfr0_el1},
     configuration::mmu::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el,
@@ -26,12 +23,13 @@ use nova::{
         },
         uart::uart_init,
     },
-    pi3::mailbox,
     println,
 };
 
 global_asm!(include_str!("vector.S"));
 global_asm!(include_str!("config.S"));
+
+static mut FRAMEBUFFER: Option<FrameBuffer> = None;
 
 extern "C" {
     fn el2_to_el1();
@@ -74,6 +72,8 @@ pub extern "C" fn main() -> ! {
 
     println!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
     println!("Moving El2->EL1");
+    unsafe { FRAMEBUFFER = Some(FrameBuffer::default()) };
+
     unsafe {
         el2_to_el1();
     }
@@ -100,15 +100,6 @@ pub extern "C" fn kernel_main() -> ! {
     }
     println!("heap allocation test: {:?}", test_vector);
 
-    // Frame Buffer memory range
-    // TODO: this is just temporary
-    allocate_memory(
-        0x3c100000,
-        1080 * 1920 * 4,
-        PhysSource::Explicit(0x3c100000),
-        NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
-    )
-    .unwrap();
     println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
 
@@ -132,22 +123,25 @@ pub extern "C" fn el0() -> ! {
 
     enable_irq_source(IRQSource::UartInt);
 
-    let fb = FrameBuffer::default();
+    if let Some(fb) = unsafe { FRAMEBUFFER.as_mut() } {
+        for i in 0..1080 {
+            fb.draw_pixel(50, i, BLUE);
+        }
+        fb.draw_square(500, 500, 600, 700, RED);
+        fb.draw_square_fill(800, 800, 900, 900, GREEN);
+        fb.draw_square_fill(1000, 800, 1200, 700, BLUE);
+        fb.draw_square_fill(900, 100, 800, 150, RED | BLUE);
+        fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
 
-    for i in 0..1080 {
-        fb.draw_pixel(50, i, BLUE);
+        fb.draw_function(cos, 0, 101, RED);
     }
-    fb.draw_square(500, 500, 600, 700, RED);
-    fb.draw_square_fill(800, 800, 900, 900, GREEN);
-    fb.draw_square_fill(1000, 800, 1200, 700, BLUE);
-    fb.draw_square_fill(900, 100, 800, 150, RED | BLUE);
-    fb.draw_string("Hello World! :D\nTest next Line", 500, 5, 3, BLUE);
-
-    fb.draw_function(cos, 0, 101, RED);
 
     loop {
-        let temp = mailbox::read_soc_temp([0]).unwrap();
-        println!("{} °C", temp[1] / 1000);
+        // TODO: Mailbox requires a physical address. The stack is now in VA space causing an issue.
+        // Fix with SVCs ?
+
+        // let temp = mailbox::read_soc_temp([0]).unwrap();
+        // println!("{} °C", temp[1] / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
