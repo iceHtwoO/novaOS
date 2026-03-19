@@ -14,7 +14,8 @@ use heap::Heap;
 
 use crate::{
     aarch64::mmu::{
-        allocate_memory, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN, WRITABLE,
+        allocate_memory, PhysSource, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN,
+        WRITABLE,
     },
     interrupt_handlers::initialize_interrupt_handler,
     logger::DefaultLogger,
@@ -33,7 +34,7 @@ pub unsafe fn init_kernel_heap() {
     let start = core::ptr::addr_of_mut!(__kernel_end) as usize | KERNEL_VIRTUAL_MEM_SPACE;
     let size = LEVEL2_BLOCK_SIZE * 2;
 
-    allocate_memory(start, size, NORMAL_MEM | UXN | WRITABLE).unwrap();
+    allocate_memory(start, size, PhysSource::Any, NORMAL_MEM | UXN | WRITABLE).unwrap();
     let heap = core::ptr::addr_of_mut!(GLOBAL_ALLOCATOR);
     (*heap).init(start, start + size);
 }

@@ -32,20 +32,19 @@ const AS: u64 = 0b1 << 36; // configure an ASID size of 16 bits
 pub static TCR_EL1_CONF: u64 = IPS | TG0 | TG1 | T0SZ | T1SZ | SH0 | SH1 | AS;
 
 pub mod mmu {
-
     use crate::{
         aarch64::mmu::{
-            alloc_block_l2, alloc_block_l2_explicit, map_l2_block, reserve_range_explicit,
+            alloc_block_l2_explicit, allocate_memory, map_l2_block, reserve_range, PhysSource,
             DEVICE_MEM, EL0_ACCESSIBLE, KERNEL_VIRTUAL_MEM_SPACE, LEVEL1_BLOCK_SIZE,
             LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY, STACK_START_ADDR,
-            TRANSLATIONTABLE_TTBR0, TRANSLATIONTABLE_TTBR1, UXN, WRITABLE,
+            TRANSLATIONTABLE_TTBR0, UXN, WRITABLE,
         },
         PERIPHERAL_BASE,
     };
 
     #[no_mangle]
     static EL1_STACK_TOP: usize = STACK_START_ADDR | KERNEL_VIRTUAL_MEM_SPACE;
-    const EL1_STACK_BOTTOM: usize = EL1_STACK_TOP - LEVEL2_BLOCK_SIZE * 2;
+    const EL1_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
 
     extern "C" {
         static _data: u64;
@@ -58,53 +57,54 @@ pub mod mmu {
         let kernel_end = unsafe { &__kernel_end } as *const _ as usize;
         let user_space_end = unsafe { &_end } as *const _ as usize;
 
-        reserve_range_explicit(0x0, user_space_end).unwrap();
+        reserve_range(0x0, user_space_end).unwrap();
 
         for addr in (0..shared_segment_end).step_by(LEVEL2_BLOCK_SIZE) {
-            let _ = map_l2_block(
+            map_l2_block(
                 addr,
                 addr,
                 core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | READ_ONLY | NORMAL_MEM,
-            );
+            )
+            .unwrap();
         }
 
         for addr in (shared_segment_end..kernel_end).step_by(LEVEL2_BLOCK_SIZE) {
-            let _ = map_l2_block(
+            map_l2_block(
                 addr,
                 addr,
                 core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 WRITABLE | UXN | NORMAL_MEM,
-            );
+            )
+            .unwrap();
         }
 
         for addr in (kernel_end..user_space_end).step_by(LEVEL2_BLOCK_SIZE) {
-            let _ = map_l2_block(
+            map_l2_block(
                 addr,
                 addr,
                 core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | WRITABLE | PXN | NORMAL_MEM,
-            );
+            )
+            .unwrap();
         }
 
         for addr in (PERIPHERAL_BASE..LEVEL1_BLOCK_SIZE).step_by(LEVEL2_BLOCK_SIZE) {
-            let _ = alloc_block_l2_explicit(
+            alloc_block_l2_explicit(
                 addr,
                 addr,
                 core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
                 EL0_ACCESSIBLE | WRITABLE | UXN | PXN | DEVICE_MEM,
-            );
+            )
+            .unwrap();
         }
 
-        for addr in (EL1_STACK_BOTTOM..EL1_STACK_TOP)
-            .rev()
-            .step_by(LEVEL2_BLOCK_SIZE)
-        {
-            let _ = alloc_block_l2(
-                addr,
-                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1),
-                WRITABLE | NORMAL_MEM,
-            );
-        }
+        allocate_memory(
+            EL1_STACK_TOP - EL1_STACK_SIZE + 0x10,
+            EL1_STACK_SIZE,
+            PhysSource::Any,
+            WRITABLE | NORMAL_MEM,
+        )
+        .unwrap();
     }
 }

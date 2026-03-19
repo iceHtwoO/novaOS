@@ -12,7 +12,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use nova::{
     aarch64::{
-        mmu::{allocate_memory_explicit, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
+        mmu::{allocate_memory, PhysSource, EL0_ACCESSIBLE, NORMAL_MEM, PXN, UXN, WRITABLE},
         registers::{daif, read_id_aa64mmfr0_el1},
     },
     configuration::mmu::initialize_mmu_translation_tables,
@@ -102,10 +102,10 @@ pub extern "C" fn kernel_main() -> ! {
 
     // Frame Buffer memory range
     // TODO: this is just temporary
-    allocate_memory_explicit(
+    allocate_memory(
         0x3c100000,
         1080 * 1920 * 4,
-        0x3c100000,
+        PhysSource::Explicit(0x3c100000),
         NORMAL_MEM | PXN | UXN | WRITABLE | EL0_ACCESSIBLE,
     )
     .unwrap();

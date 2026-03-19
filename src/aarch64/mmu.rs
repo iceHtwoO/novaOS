@@ -1,9 +1,12 @@
-use core::panic;
-
 use core::mem::size_of;
 use nova_error::NovaError;
 
-use crate::get_current_el;
+use crate::{
+    aarch64::mmu::physical_mapping::{
+        reserve_block, reserve_block_explicit, reserve_page, reserve_page_explicit,
+    },
+    get_current_el,
+};
 
 unsafe extern "C" {
     static mut __translation_table_l2_start: u64;
@@ -51,6 +54,16 @@ pub const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
 
 pub const STACK_START_ADDR: usize = !KERNEL_VIRTUAL_MEM_SPACE & (!0xF);
 
+mod physical_mapping;
+
+type VirtAddr = usize;
+type PhysAddr = usize;
+
+pub enum PhysSource {
+    Any,
+    Explicit(PhysAddr),
+}
+
 #[repr(align(4096))]
 pub struct PageTable([u64; TABLE_ENTRY_COUNT]);
 
@@ -59,29 +72,18 @@ pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([0; 512]);
 #[no_mangle]
 pub static mut TRANSLATIONTABLE_TTBR1: PageTable = PageTable([0; 512]);
 
-static mut PAGING_BITMAP: [u64; MAX_PAGE_COUNT / 64] = [0; MAX_PAGE_COUNT / 64];
-
 /// Allocate a memory block of `size` starting at `virtual_address`.
 pub fn allocate_memory(
-    mut virtual_address: usize,
-    mut size: usize,
-    additional_flags: u64,
+    virtual_address: usize,
+    size_bytes: usize,
+    phys: PhysSource,
+    flags: u64,
 ) -> Result<(), NovaError> {
     if !virtual_address.is_multiple_of(GRANULARITY) {
         return Err(NovaError::Misalignment);
     }
-
-    let level1_blocks = size / LEVEL1_BLOCK_SIZE;
-    size %= LEVEL1_BLOCK_SIZE;
-    let level2_blocks = size / LEVEL2_BLOCK_SIZE;
-    size %= LEVEL2_BLOCK_SIZE;
-    let level3_pages = size / GRANULARITY;
-    if !size.is_multiple_of(GRANULARITY) {
+    if !size_bytes.is_multiple_of(GRANULARITY) {
         return Err(NovaError::InvalidGranularity);
-    }
-
-    if level1_blocks > 0 {
-        todo!("Currently not supported");
     }
 
     let base_table = if virtual_address & KERNEL_VIRTUAL_MEM_SPACE > 0 {
@@ -90,91 +92,65 @@ pub fn allocate_memory(
         core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0)
     };
 
-    for _ in 0..level2_blocks {
-        alloc_block_l2(virtual_address, base_table, additional_flags)?;
-        virtual_address += LEVEL2_BLOCK_SIZE;
+    match phys {
+        PhysSource::Any => map_range_dynamic(virtual_address, size_bytes, base_table, flags),
+        PhysSource::Explicit(phys_addr) => {
+            map_range_explicit(virtual_address, phys_addr, size_bytes, base_table, flags)
+        }
     }
-    for _ in 0..level3_pages {
-        alloc_page(virtual_address, base_table, additional_flags)?;
-        virtual_address += GRANULARITY;
+}
+
+fn map_range_explicit(
+    mut virt: VirtAddr,
+    mut phys: PhysAddr,
+    size_bytes: usize,
+    base: *mut PageTable,
+    flags: u64,
+) -> Result<(), NovaError> {
+    let mut remaining = size_bytes;
+
+    while virt % LEVEL2_BLOCK_SIZE != 0 {
+        map_page(virt, phys, base, flags)?;
+        virt += GRANULARITY;
+        phys += GRANULARITY;
+        remaining -= GRANULARITY;
+    }
+
+    while remaining >= LEVEL2_BLOCK_SIZE {
+        map_l2_block(virt, phys, base, flags)?;
+        virt += LEVEL2_BLOCK_SIZE;
+        phys += LEVEL2_BLOCK_SIZE;
+        remaining -= LEVEL2_BLOCK_SIZE;
+    }
+
+    while remaining > 0 {
+        map_page(virt, phys, base, flags)?;
+        virt += GRANULARITY;
+        phys += GRANULARITY;
+        remaining -= GRANULARITY;
     }
 
     Ok(())
 }
 
-/// Allocate a memory block of `size` starting at `virtual_address`,
-/// with explicit physical_address.
-///
-/// Note: This can be used when mapping predefined regions.
-pub fn allocate_memory_explicit(
-    mut virtual_address: usize,
-    mut size: usize,
-    mut physical_address: usize,
-    additional_flags: u64,
+fn map_range_dynamic(
+    mut virt: PhysAddr,
+    size_bytes: usize,
+    base: *mut PageTable,
+    flags: u64,
 ) -> Result<(), NovaError> {
-    if !virtual_address.is_multiple_of(GRANULARITY) {
-        return Err(NovaError::Misalignment);
-    }
-    if !physical_address.is_multiple_of(GRANULARITY) {
-        return Err(NovaError::Misalignment);
-    }
+    let mut remaining = size_bytes;
 
-    let level1_blocks = size / LEVEL1_BLOCK_SIZE;
-    size %= LEVEL1_BLOCK_SIZE;
-    let mut level2_blocks = size / LEVEL2_BLOCK_SIZE;
-    size %= LEVEL2_BLOCK_SIZE;
-    let mut level3_pages = size / GRANULARITY;
-    if !size.is_multiple_of(GRANULARITY) {
-        return Err(NovaError::InvalidGranularity);
+    while remaining >= LEVEL2_BLOCK_SIZE {
+        map_l2_block(virt, reserve_block(), base, flags)?;
+        virt += LEVEL2_BLOCK_SIZE;
+        remaining -= LEVEL2_BLOCK_SIZE;
     }
 
-    if level1_blocks > 0 {
-        todo!("Currently not supported");
-    }
-
-    let l2_alignment = (physical_address % LEVEL2_BLOCK_SIZE) / GRANULARITY;
-    if l2_alignment != 0 {
-        let l3_diff = LEVEL2_BLOCK_SIZE / GRANULARITY - l2_alignment;
-        if l3_diff > level3_pages {
-            level2_blocks -= 1;
-            level3_pages += TABLE_ENTRY_COUNT;
-        }
-
-        level3_pages -= l3_diff;
-
-        for _ in 0..l3_diff {
-            alloc_page_explicit(
-                virtual_address,
-                physical_address,
-                core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-                additional_flags,
-            )?;
-
-            virtual_address += GRANULARITY;
-            physical_address += GRANULARITY;
-        }
-    }
-
-    for _ in 0..level2_blocks {
-        alloc_block_l2_explicit(
-            virtual_address,
-            physical_address,
-            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-            additional_flags,
-        )?;
-        virtual_address += LEVEL2_BLOCK_SIZE;
-        physical_address += LEVEL2_BLOCK_SIZE;
-    }
-
-    for _ in 0..level3_pages {
-        alloc_page_explicit(
-            virtual_address,
-            physical_address,
-            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-            additional_flags,
-        )?;
-        virtual_address += GRANULARITY;
-        physical_address += GRANULARITY;
+    while remaining > 0 {
+        map_page(virt, reserve_page(), base, flags)?;
+        virt += GRANULARITY;
+        remaining -= GRANULARITY;
     }
 
     Ok(())
@@ -232,20 +208,6 @@ fn map_page(
     Ok(())
 }
 
-// Allocate a level 2 block.
-pub fn alloc_block_l2(
-    virtual_addr: usize,
-    base_table_ptr: *mut PageTable,
-    additional_flags: u64,
-) -> Result<(), NovaError> {
-    map_l2_block(
-        virtual_addr,
-        reserve_block(),
-        base_table_ptr,
-        additional_flags,
-    )
-}
-
 // Allocate a level 2 block, at a explicit `physical_address`.
 pub fn alloc_block_l2_explicit(
     virtual_addr: usize,
@@ -290,10 +252,10 @@ pub fn map_l2_block(
     Ok(())
 }
 
-pub fn reserve_range_explicit(
-    start_physical_address: usize,
-    end_physical_address: usize,
-) -> Result<(), NovaError> {
+pub fn reserve_range(
+    start_physical_address: PhysAddr,
+    end_physical_address: PhysAddr,
+) -> Result<PhysAddr, NovaError> {
     let mut size = end_physical_address - start_physical_address;
     let l1_blocks = size / LEVEL1_BLOCK_SIZE;
     size %= LEVEL1_BLOCK_SIZE;
@@ -320,57 +282,7 @@ pub fn reserve_range_explicit(
         addr += GRANULARITY;
     }
 
-    Ok(())
-}
-
-fn reserve_page() -> usize {
-    if let Some(address) = find_unallocated_page() {
-        let page = address / GRANULARITY;
-        let word_index = page / 64;
-        unsafe { PAGING_BITMAP[word_index] |= 1 << (page % 64) };
-        return address;
-    }
-    panic!("Out of Memory!");
-}
-
-fn reserve_page_explicit(physical_address: usize) -> Result<(), NovaError> {
-    let page = physical_address / GRANULARITY;
-    let word_index = page / 64;
-
-    if unsafe { PAGING_BITMAP[word_index] } & (1 << (page % 64)) > 0 {
-        return Err(NovaError::Paging);
-    }
-
-    unsafe { PAGING_BITMAP[word_index] |= 1 << (page % 64) };
-    Ok(())
-}
-
-fn reserve_block() -> usize {
-    if let Some(start) = find_contiguous_free_bitmap_words(L2_BLOCK_BITMAP_WORDS) {
-        for j in 0..L2_BLOCK_BITMAP_WORDS {
-            unsafe { PAGING_BITMAP[start + j] = u64::MAX };
-        }
-        return start * 64 * GRANULARITY;
-    }
-
-    panic!("Out of Memory!");
-}
-
-fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> {
-    let page = physical_address / GRANULARITY;
-    for i in 0..L2_BLOCK_BITMAP_WORDS {
-        unsafe {
-            if PAGING_BITMAP[(page / 64) + i] != 0 {
-                return Err(NovaError::Paging);
-            }
-        };
-    }
-    for i in 0..L2_BLOCK_BITMAP_WORDS {
-        unsafe {
-            PAGING_BITMAP[(page / 64) + i] = u64::MAX;
-        };
-    }
-    Ok(())
+    Ok(start_physical_address)
 }
 
 fn create_block_descriptor_entry(physical_address: usize, additional_flags: u64) -> u64 {
@@ -399,18 +311,6 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
     let l2_off = (absolute_page_off / TABLE_ENTRY_COUNT) % TABLE_ENTRY_COUNT;
     let l1_off = (absolute_page_off / TABLE_ENTRY_COUNT / TABLE_ENTRY_COUNT) % TABLE_ENTRY_COUNT;
     (l1_off, l2_off, l3_off)
-}
-
-/// Debugging function to navigate the translation tables.
-#[allow(unused_variables)]
-pub fn sim_l3_access(addr: usize) {
-    unsafe {
-        let entry1 = TRANSLATIONTABLE_TTBR0.0[addr / LEVEL1_BLOCK_SIZE];
-        let table2 = &mut *(entry_phys(entry1 as usize) as *mut PageTable);
-        let entry2 = table2.0[(addr % LEVEL1_BLOCK_SIZE) / LEVEL2_BLOCK_SIZE];
-        let table3 = &mut *(entry_phys(entry2 as usize) as *mut PageTable);
-        let _entry3 = table3.0[(addr % LEVEL2_BLOCK_SIZE) / GRANULARITY];
-    }
 }
 
 /// Navigate the table tree, by following given offsets. This function
@@ -451,49 +351,14 @@ fn next_table(table_ptr: *mut PageTable, offset: usize) -> Result<*mut PageTable
     }
 }
 
-fn find_unallocated_page() -> Option<usize> {
-    for (i, entry) in unsafe { PAGING_BITMAP }.iter().enumerate() {
-        if *entry != u64::MAX {
-            for offset in 0..64 {
-                if entry >> offset & 0b1 == 0 {
-                    return Some((i * 64 + offset) * GRANULARITY);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn find_contiguous_free_bitmap_words(required_words: usize) -> Option<usize> {
-    let mut run_start = 0;
-    let mut run_len = 0;
-
-    for (i, entry) in unsafe { PAGING_BITMAP }.iter().enumerate() {
-        if *entry == 0 {
-            if run_len == 0 {
-                run_start = i;
-            }
-            run_len += 1;
-
-            if run_len == required_words {
-                return Some(run_start);
-            }
-        } else {
-            run_len = 0;
-        }
-    }
-
-    None
-}
-
 /// Extracts the physical address out of an table entry.
 #[inline]
-fn entry_phys(entry: usize) -> usize {
+fn entry_phys(entry: usize) -> PhysAddr {
     entry & 0x0000_FFFF_FFFF_F000
 }
 
 #[inline]
-fn entry_table_addr(entry: usize) -> usize {
+fn entry_table_addr(entry: usize) -> VirtAddr {
     if get_current_el() == 1 {
         phys_table_to_kernel_space(entry_phys(entry))
     } else {
@@ -503,6 +368,6 @@ fn entry_table_addr(entry: usize) -> usize {
 
 /// Extracts the physical address out of an table entry.
 #[inline]
-fn phys_table_to_kernel_space(entry: usize) -> usize {
+fn phys_table_to_kernel_space(entry: usize) -> VirtAddr {
     entry | TRANSLATION_TABLE_BASE_ADDR
 }
