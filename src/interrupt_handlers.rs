@@ -3,15 +3,19 @@ use core::arch::asm;
 use alloc::vec::Vec;
 
 use crate::{
-    aarch64::registers::{
-        daif::{mask_all, unmask_irq},
-        read_elr_el1, read_esr_el1, read_exception_source_el,
+    aarch64::{
+        mmu::{allocate_memory, physical_mapping::reserve_page},
+        registers::{
+            daif::{mask_all, unmask_irq},
+            read_elr_el1, read_esr_el1, read_exception_source_el,
+        },
     },
     get_current_el,
     peripherals::{
         gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
         uart::clear_uart_interrupt_state,
     },
+    pi3::mailbox,
     println, read_address, write_address,
 };
 
@@ -21,6 +25,31 @@ const ENABLE_IRQ_BASE: u32 = INTERRUPT_BASE + 0x210;
 const DISABLE_IRQ_BASE: u32 = INTERRUPT_BASE + 0x21C;
 
 const GPIO_PENDING_BIT_OFFSET: u64 = 0b1111 << 49;
+
+#[repr(C)]
+pub struct TrapFrame {
+    pub x0: u64,
+    pub x1: u64,
+    pub x2: u64,
+    pub x3: u64,
+    pub x4: u64,
+    pub x5: u64,
+    pub x6: u64,
+    pub x7: u64,
+    pub x8: u64,
+    pub x9: u64,
+    pub x10: u64,
+    pub x11: u64,
+    pub x12: u64,
+    pub x13: u64,
+    pub x14: u64,
+    pub x15: u64,
+    pub x16: u64,
+    pub x17: u64,
+    pub x18: u64,
+    pub x29: u64,
+    pub x30: u64,
+}
 
 struct InterruptHandlers {
     source: IRQSource,
@@ -107,13 +136,43 @@ unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
 
 /// Synchronous Exception Handler
 ///
-/// Lower Exception level, where the implemented level
+/// Source is a lower Exception level, where the implemented level
 /// immediately lower than the target level is using
 /// AArch64.
 #[no_mangle]
-unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
+unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut TrapFrame) -> usize {
     mask_all();
+    let esr: EsrElX = EsrElX::from(read_esr_el1());
+    match esr.ec {
+        0b100100 => {
+            println!("Cause: Data Abort from a lower Exception level");
+            log_sync_exception();
+        }
+        0b010101 => {
+            println!("Cause: SVC instruction execution in AArch64");
+            return handle_svc(frame);
+        }
+        _ => {
+            println!("Unknown Error Code: {:b}", esr.ec);
+        }
+    }
+    println!("Returning to kernel main...");
 
+    set_return_to_kernel_main();
+    return 0;
+}
+
+fn handle_svc(frame: &mut TrapFrame) -> usize {
+    match frame.x8 {
+        67 => {
+            let response = mailbox::read_soc_temp([0]).unwrap();
+            response[0] as usize
+        }
+        _ => 0,
+    }
+}
+
+fn log_sync_exception() {
     let source_el = read_exception_source_el() >> 2;
     println!("--------Sync Exception in EL{}--------", source_el);
     println!("Exception escalated to EL {}", get_current_el());
@@ -121,18 +180,7 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64() {
     let esr: EsrElX = EsrElX::from(read_esr_el1());
     println!("{:?}", esr);
     println!("Return address: {:#x}", read_elr_el1());
-
-    match esr.ec {
-        0b100100 => {
-            println!("Cause: Data Abort from a lower Exception level");
-        }
-        _ => {
-            println!("Unknown Error Code: {:b}", esr.ec);
-        }
-    }
     println!("-------------------------------------");
-
-    set_return_to_kernel_main();
 }
 
 fn clear_interrupt_for_source(source: IRQSource) {

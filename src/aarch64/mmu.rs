@@ -47,7 +47,7 @@ pub const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
 
 pub const STACK_START_ADDR: usize = !KERNEL_VIRTUAL_MEM_SPACE & (!0xF);
 
-mod physical_mapping;
+pub mod physical_mapping;
 
 type VirtAddr = usize;
 type PhysAddr = usize;
@@ -189,7 +189,7 @@ pub fn map_page(
 
     let offsets = [l1_off, l2_off];
 
-    let table_ptr = navigate_table(base_table_ptr, &offsets)?;
+    let table_ptr = navigate_table(base_table_ptr, &offsets, true)?;
     let table = unsafe { &mut *table_ptr };
 
     if table.0[l3_off] & 0b11 > 0 {
@@ -229,7 +229,7 @@ pub fn map_l2_block(
 ) -> Result<(), NovaError> {
     let (l1_off, l2_off, _) = virtual_address_to_table_offset(virtual_addr);
     let offsets = [l1_off];
-    let table_ptr = navigate_table(base_table_ptr, &offsets)?;
+    let table_ptr = navigate_table(base_table_ptr, &offsets, true)?;
 
     let table = unsafe { &mut *table_ptr };
 
@@ -311,10 +311,11 @@ fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize)
 fn navigate_table(
     initial_table_ptr: *mut PageTable,
     offsets: &[usize],
+    create_missing: bool,
 ) -> Result<*mut PageTable, NovaError> {
     let mut table = initial_table_ptr;
     for offset in offsets {
-        table = next_table(table, *offset)?;
+        table = next_table(table, *offset, create_missing)?;
     }
     Ok(table)
 }
@@ -322,10 +323,17 @@ fn navigate_table(
 /// Get the next table one level down.
 ///
 /// If table doesn't exit a page will be allocated for it.
-fn next_table(table_ptr: *mut PageTable, offset: usize) -> Result<*mut PageTable, NovaError> {
+fn next_table(
+    table_ptr: *mut PageTable,
+    offset: usize,
+    create_missing: bool,
+) -> Result<*mut PageTable, NovaError> {
     let table = unsafe { &mut *table_ptr };
     match table.0[offset] & 0b11 {
         0 => {
+            if !create_missing {
+                return Err(NovaError::Paging);
+            }
             let new_phys_page_table_address = reserve_page();
 
             table.0[offset] = create_table_descriptor_entry(new_phys_page_table_address);
@@ -336,22 +344,22 @@ fn next_table(table_ptr: *mut PageTable, offset: usize) -> Result<*mut PageTable
                 NORMAL_MEM | WRITABLE | PXN | UXN,
             )?;
 
-            Ok(entry_table_addr(table.0[offset] as usize) as *mut PageTable)
+            Ok(entry_table_addr(table.0[offset]) as *mut PageTable)
         }
         1 => Err(NovaError::Paging),
-        3 => Ok(entry_table_addr(table.0[offset] as usize) as *mut PageTable),
+        3 => Ok(entry_table_addr(table.0[offset]) as *mut PageTable),
         _ => unreachable!(),
     }
 }
 
 /// Extracts the physical address out of an table entry.
 #[inline]
-fn entry_phys(entry: usize) -> PhysAddr {
-    entry & 0x0000_FFFF_FFFF_F000
+fn entry_phys(entry: u64) -> PhysAddr {
+    entry as usize & 0x0000_FFFF_FFFF_F000
 }
 
 #[inline]
-fn entry_table_addr(entry: usize) -> VirtAddr {
+fn entry_table_addr(entry: u64) -> VirtAddr {
     if get_current_el() == 1 {
         phys_table_to_kernel_space(entry_phys(entry))
     } else {
@@ -363,4 +371,17 @@ fn entry_table_addr(entry: usize) -> VirtAddr {
 #[inline]
 fn phys_table_to_kernel_space(entry: usize) -> VirtAddr {
     entry | TRANSLATION_TABLE_BASE_ADDR
+}
+
+fn page_address_to_physical_address(mut virtual_address: VirtAddr) -> PhysAddr {
+    let root_table = if virtual_address & KERNEL_VIRTUAL_MEM_SPACE > 0 {
+        &raw mut TRANSLATIONTABLE_TTBR1
+    } else {
+        &raw mut TRANSLATIONTABLE_TTBR0
+    };
+    virtual_address &= !KERNEL_VIRTUAL_MEM_SPACE;
+    let (l1_off, l2_off, l3_off) = virtual_address_to_table_offset(virtual_address);
+    let offsets = [l1_off, l2_off];
+    let table = unsafe { &*navigate_table(root_table, &offsets, false).unwrap() };
+    entry_phys(table.0[l3_off])
 }

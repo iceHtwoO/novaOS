@@ -4,9 +4,13 @@ SECTIONS {
     .text ALIGN(4) : {
         KEEP(*(.text._start))
         *(.text .text.*)
-        . = ALIGN(4K);
-        __text_end = .;
     }
+    .vector_table ALIGN(2K) : {
+        KEEP(*(.vector_t))
+    }
+
+    . = ALIGN(4K);
+    __text_end = .;
 
     .rodata : {
         *(.rodata .rodata.*)
@@ -25,10 +29,6 @@ SECTIONS {
     . = ALIGN(2M);
 
     __share_end = .;
-
-    .vector_table ALIGN(2K) : {
-        KEEP(*(.vector_table))
-    }
 
     # EL2 Stack
     .stack ALIGN(16): {

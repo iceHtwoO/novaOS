@@ -39,6 +39,10 @@ impl Heap {
         }
     }
 
+    pub fn size(self) -> usize {
+        self.raw_size
+    }
+
     pub fn init(&mut self, heap_start: usize, heap_end: usize) {
         self.start_address = heap_start as *mut HeapHeader;
         self.end_address = heap_end as *mut HeapHeader;

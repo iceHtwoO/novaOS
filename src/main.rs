@@ -4,7 +4,7 @@
 #![allow(clippy::missing_safety_doc)]
 use core::{
     arch::{asm, global_asm},
-    ptr::write_volatile,
+    ptr::{read_volatile, write_volatile},
 };
 
 extern crate alloc;
@@ -140,8 +140,8 @@ pub extern "C" fn el0() -> ! {
         // TODO: Mailbox requires a physical address. The stack is now in VA space causing an issue.
         // Fix with SVCs ?
 
-        // let temp = mailbox::read_soc_temp([0]).unwrap();
-        // println!("{} °C", temp[1] / 1000);
+        let temp = syscall(67);
+        println!("{} °C", temp / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
@@ -156,4 +156,18 @@ fn enable_uart() {
     let _ = set_gpio_function(14, GPIOFunction::Alternative0);
     let _ = set_gpio_function(15, GPIOFunction::Alternative0);
     uart_init();
+}
+
+pub fn syscall(nr: u64) -> u64 {
+    let ret: u64;
+
+    unsafe {
+        asm!(
+            "svc #0",
+            in("x8") nr,
+            lateout("x0") ret,
+        );
+    }
+
+    ret
 }

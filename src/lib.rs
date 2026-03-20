@@ -78,8 +78,14 @@ pub fn get_current_el() -> u64 {
     el >> 2
 }
 
+static mut KERNEL_INITIALIZED: bool = false;
+
 pub fn initialize_kernel() {
+    if unsafe { KERNEL_INITIALIZED } {
+        return;
+    }
     unsafe { init_kernel_heap() };
     logger::set_logger(Box::new(DefaultLogger));
     initialize_interrupt_handler();
+    unsafe { KERNEL_INITIALIZED = true };
 }
