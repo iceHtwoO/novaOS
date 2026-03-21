@@ -49,8 +49,54 @@ pub const STACK_START_ADDR: usize = !KERNEL_VIRTUAL_MEM_SPACE & (!0xF);
 
 pub mod physical_mapping;
 
-type VirtAddr = usize;
-type PhysAddr = usize;
+pub type VirtAddr = usize;
+pub type PhysAddr = usize;
+
+#[derive(Clone, Copy)]
+pub struct TableEntry {
+    value: u64,
+}
+
+impl TableEntry {
+    pub fn invalid() -> Self {
+        Self { value: 0 }
+    }
+
+    fn table_descriptor(addr: PhysAddr) -> Self {
+        Self {
+            value: (addr as u64 & 0x0000_FFFF_FFFF_F000) | TABLE,
+        }
+    }
+
+    fn block_descriptor(physical_address: usize, additional_flags: u64) -> Self {
+        Self {
+            value: (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
+                | BLOCK
+                | ACCESS_FLAG
+                | INNER_SHAREABILITY
+                | additional_flags,
+        }
+    }
+
+    fn page_descriptor(physical_address: usize, additional_flags: u64) -> Self {
+        Self {
+            value: (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
+                | PAGE
+                | ACCESS_FLAG
+                | INNER_SHAREABILITY
+                | additional_flags,
+        }
+    }
+
+    fn is_invalid(self) -> bool {
+        self.value & 0b11 == 0
+    }
+
+    #[inline]
+    fn address(self) -> PhysAddr {
+        self.value as usize & 0x0000_FFFF_FFFF_F000
+    }
+}
 
 pub enum PhysSource {
     Any,
@@ -58,12 +104,12 @@ pub enum PhysSource {
 }
 
 #[repr(align(4096))]
-pub struct PageTable([u64; TABLE_ENTRY_COUNT]);
+pub struct PageTable([TableEntry; TABLE_ENTRY_COUNT]);
 
 #[no_mangle]
-pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([0; 512]);
+pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([TableEntry { value: 0 }; 512]);
 #[no_mangle]
-pub static mut TRANSLATIONTABLE_TTBR1: PageTable = PageTable([0; 512]);
+pub static mut TRANSLATIONTABLE_TTBR1: PageTable = PageTable([TableEntry { value: 0 }; 512]);
 
 /// Allocate a memory block of `size` starting at `virtual_address`.
 pub fn allocate_memory(
@@ -102,7 +148,7 @@ fn map_range_explicit(
 ) -> Result<(), NovaError> {
     let mut remaining = size_bytes;
 
-    while virt % LEVEL2_BLOCK_SIZE != 0 {
+    while !virt.is_multiple_of(LEVEL2_BLOCK_SIZE) && remaining > 0 {
         map_page(virt, phys, base, flags)?;
         (virt, _) = virt.overflowing_add(GRANULARITY);
         phys += GRANULARITY;
@@ -192,11 +238,11 @@ pub fn map_page(
     let table_ptr = navigate_table(base_table_ptr, &offsets, true)?;
     let table = unsafe { &mut *table_ptr };
 
-    if table.0[l3_off] & 0b11 > 0 {
+    if !table.0[l3_off].is_invalid() {
         return Err(NovaError::Paging);
     }
 
-    table.0[l3_off] = create_page_descriptor_entry(physical_address, additional_flags);
+    table.0[l3_off] = TableEntry::page_descriptor(physical_address, additional_flags);
 
     Ok(())
 }
@@ -234,11 +280,11 @@ pub fn map_l2_block(
     let table = unsafe { &mut *table_ptr };
 
     // Verify virtual address is available.
-    if table.0[l2_off] & 0b11 != 0 {
+    if !table.0[l2_off].is_invalid() {
         return Err(NovaError::Paging);
     }
 
-    let new_entry = create_block_descriptor_entry(physical_address, additional_flags);
+    let new_entry = TableEntry::block_descriptor(physical_address, additional_flags);
 
     table.0[l2_off] = new_entry;
 
@@ -278,26 +324,6 @@ pub fn reserve_range(
     Ok(start_physical_address)
 }
 
-fn create_block_descriptor_entry(physical_address: usize, additional_flags: u64) -> u64 {
-    (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
-        | BLOCK
-        | ACCESS_FLAG
-        | INNER_SHAREABILITY
-        | additional_flags
-}
-
-fn create_page_descriptor_entry(physical_address: usize, additional_flags: u64) -> u64 {
-    (physical_address as u64 & 0x0000_FFFF_FFFF_F000)
-        | PAGE
-        | ACCESS_FLAG
-        | INNER_SHAREABILITY
-        | additional_flags
-}
-
-fn create_table_descriptor_entry(addr: usize) -> u64 {
-    (addr as u64 & 0x0000_FFFF_FFFF_F000) | TABLE
-}
-
 fn virtual_address_to_table_offset(virtual_addr: usize) -> (usize, usize, usize) {
     let absolute_page_off = (virtual_addr & !KERNEL_VIRTUAL_MEM_SPACE) / GRANULARITY;
     let l3_off = absolute_page_off % TABLE_ENTRY_COUNT;
@@ -329,14 +355,14 @@ fn next_table(
     create_missing: bool,
 ) -> Result<*mut PageTable, NovaError> {
     let table = unsafe { &mut *table_ptr };
-    match table.0[offset] & 0b11 {
+    match table.0[offset].value & 0b11 {
         0 => {
             if !create_missing {
                 return Err(NovaError::Paging);
             }
             let new_phys_page_table_address = reserve_page();
 
-            table.0[offset] = create_table_descriptor_entry(new_phys_page_table_address);
+            table.0[offset] = TableEntry::table_descriptor(new_phys_page_table_address);
             map_page(
                 phys_table_to_kernel_space(new_phys_page_table_address),
                 new_phys_page_table_address,
@@ -344,26 +370,29 @@ fn next_table(
                 NORMAL_MEM | WRITABLE | PXN | UXN,
             )?;
 
-            Ok(entry_table_addr(table.0[offset]) as *mut PageTable)
+            Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable)
         }
         1 => Err(NovaError::Paging),
-        3 => Ok(entry_table_addr(table.0[offset]) as *mut PageTable),
+        3 => Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable),
         _ => unreachable!(),
     }
 }
 
-/// Extracts the physical address out of an table entry.
+/// Converts a physical table address and returns the corresponding virtual address depending on EL.
+///
+/// - `== EL0` -> panic
+/// - `== EL1` -> 0xFFFFFF82XXXXXXXX
+/// - `>= EL2` -> physical address
 #[inline]
-fn entry_phys(entry: u64) -> PhysAddr {
-    entry as usize & 0x0000_FFFF_FFFF_F000
-}
+fn resolve_table_addr(physical_address: PhysAddr) -> VirtAddr {
+    let current_el = get_current_el();
 
-#[inline]
-fn entry_table_addr(entry: u64) -> VirtAddr {
-    if get_current_el() == 1 {
-        phys_table_to_kernel_space(entry_phys(entry))
+    if current_el >= 2 {
+        physical_address
+    } else if get_current_el() == 1 {
+        phys_table_to_kernel_space(physical_address)
     } else {
-        entry_phys(entry)
+        panic!("Access to table entries is forbidden in EL0.")
     }
 }
 
@@ -371,17 +400,4 @@ fn entry_table_addr(entry: u64) -> VirtAddr {
 #[inline]
 fn phys_table_to_kernel_space(entry: usize) -> VirtAddr {
     entry | TRANSLATION_TABLE_BASE_ADDR
-}
-
-fn page_address_to_physical_address(mut virtual_address: VirtAddr) -> PhysAddr {
-    let root_table = if virtual_address & KERNEL_VIRTUAL_MEM_SPACE > 0 {
-        &raw mut TRANSLATIONTABLE_TTBR1
-    } else {
-        &raw mut TRANSLATIONTABLE_TTBR0
-    };
-    virtual_address &= !KERNEL_VIRTUAL_MEM_SPACE;
-    let (l1_off, l2_off, l3_off) = virtual_address_to_table_offset(virtual_address);
-    let offsets = [l1_off, l2_off];
-    let table = unsafe { &*navigate_table(root_table, &offsets, false).unwrap() };
-    entry_phys(table.0[l3_off])
 }

@@ -3,12 +3,9 @@ use core::arch::asm;
 use alloc::vec::Vec;
 
 use crate::{
-    aarch64::{
-        mmu::{allocate_memory, physical_mapping::reserve_page},
-        registers::{
-            daif::{mask_all, unmask_irq},
-            read_elr_el1, read_esr_el1, read_exception_source_el,
-        },
+    aarch64::registers::{
+        daif::{mask_all, unmask_irq},
+        read_elr_el1, read_esr_el1, read_exception_source_el,
     },
     get_current_el,
     peripherals::{
@@ -159,14 +156,14 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut Tr
     println!("Returning to kernel main...");
 
     set_return_to_kernel_main();
-    return 0;
+    0
 }
 
 fn handle_svc(frame: &mut TrapFrame) -> usize {
     match frame.x8 {
         67 => {
             let response = mailbox::read_soc_temp([0]).unwrap();
-            response[0] as usize
+            response[1] as usize
         }
         _ => 0,
     }

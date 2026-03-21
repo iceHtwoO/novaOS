@@ -4,7 +4,7 @@
 #![allow(clippy::missing_safety_doc)]
 use core::{
     arch::{asm, global_asm},
-    ptr::{read_volatile, write_volatile},
+    ptr::write_volatile,
 };
 
 extern crate alloc;
@@ -12,7 +12,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use nova::{
     aarch64::registers::{daif, read_id_aa64mmfr0_el1},
-    configuration::mmu::initialize_mmu_translation_tables,
+    configuration::memory_mapping::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el,
     interrupt_handlers::{enable_irq_source, IRQSource},
@@ -64,11 +64,9 @@ pub extern "C" fn main() -> ! {
     println!("Hello World!");
     println!("Exception level: {}", get_current_el());
 
-    unsafe {
-        initialize_mmu_translation_tables();
-        configure_mmu_el1();
-        println!("MMU initialized...");
-    };
+    initialize_mmu_translation_tables();
+    unsafe { configure_mmu_el1() };
+    println!("MMU initialized...");
 
     println!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
     println!("Moving El2->EL1");

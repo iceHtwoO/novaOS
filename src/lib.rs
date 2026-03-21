@@ -19,6 +19,7 @@ use crate::{
     },
     interrupt_handlers::initialize_interrupt_handler,
     logger::DefaultLogger,
+    pi3::timer::sleep_s,
 };
 
 static PERIPHERAL_BASE: usize = 0x3F00_0000;
@@ -43,6 +44,7 @@ pub unsafe fn init_kernel_heap() {
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
         println!("Panic: {}", _panic.message());
+        sleep_s(1);
     }
 }
 
