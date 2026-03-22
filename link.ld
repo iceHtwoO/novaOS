@@ -5,13 +5,18 @@ SECTIONS {
         KEEP(*(.text._start))
         *(.text .text.*)
     }
+    .vector_table ALIGN(2K) : {
+        KEEP(*(.vector_t))
+    }
+
+    . = ALIGN(4K);
+    __text_end = .;
 
     .rodata : {
         *(.rodata .rodata.*)
     }
 
-    .data ALIGN(2M) : {
-        _data = .;
+    .data  : {
         *(.data .data.*)
     }
 
@@ -21,9 +26,9 @@ SECTIONS {
         __bss_end = .;
     }
 
-    .vector_table ALIGN(2K) : {
-        KEEP(*(.vector_table))
-    }
+    . = ALIGN(2M);
+
+    __share_end = .;
 
     # EL2 Stack
     .stack ALIGN(16): {
@@ -36,15 +41,6 @@ SECTIONS {
     . = ALIGN(2M);
 
     __kernel_end = .;
-
-    .stack_el0 : {
-    __stack_start_el0 = .;
-    . += 10K; #10kB stack
-    __stack_end_el0 = .;
-    }
-
-    . = ALIGN(2M);
-    _end = .;
 }
 
 __bss_size = (__bss_end - __bss_start) >> 3;

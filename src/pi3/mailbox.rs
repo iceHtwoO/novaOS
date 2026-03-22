@@ -1,4 +1,9 @@
-use crate::{read_address, write_address};
+use core::slice;
+
+use crate::{
+    aarch64::mmu::GRANULARITY, configuration::memory_mapping::MAILBOX_PHYSICAL_ADDRESS,
+    configuration::memory_mapping::MAILBOX_VIRTUAL_ADDRESS, read_address, write_address,
+};
 use nova_error::NovaError;
 
 const MBOX_BASE: u32 = 0x3F00_0000 + 0xB880;
@@ -31,8 +36,9 @@ macro_rules! mailbox_command {
         pub fn $name(
             request_data: [u32; $request_len / 4],
         ) -> Result<[u32; $response_len / 4], NovaError> {
-            let mut mailbox =
-                [0u32; (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) / 4];
+            let mailbox = unsafe {
+                slice::from_raw_parts_mut(MAILBOX_VIRTUAL_ADDRESS as *mut u32, GRANULARITY / 4)
+            };
             mailbox[0] = (HEADER_LENGTH + max!($request_len, $response_len) + FOOTER_LENGTH) as u32; // Total length in Bytes
             mailbox[1] = 0; // Request
             mailbox[2] = $tag; // Command Tag
@@ -42,9 +48,9 @@ macro_rules! mailbox_command {
             mailbox[5..(5 + ($request_len / 4))].copy_from_slice(&request_data);
             mailbox[(5 + ($request_len / 4))..].fill(0);
 
-            let addr = core::ptr::addr_of!(mailbox[0]) as u32;
+            //let addr = core::ptr::addr_of!(mailbox[0]) as u32;
 
-            write_mailbox(8, addr);
+            write_mailbox(8, unsafe { MAILBOX_PHYSICAL_ADDRESS.unwrap() } as u32);
 
             let _ = read_mailbox(8);
 

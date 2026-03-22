@@ -14,10 +14,12 @@ use heap::Heap;
 
 use crate::{
     aarch64::mmu::{
-        allocate_memory, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN, WRITABLE,
+        allocate_memory, PhysSource, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN,
+        WRITABLE,
     },
-    interrupt_handlers::initialize_interrupt_handler,
+    interrupt_handlers::irq::initialize_interrupt_handler,
     logger::DefaultLogger,
+    pi3::timer::sleep_s,
 };
 
 static PERIPHERAL_BASE: usize = 0x3F00_0000;
@@ -33,7 +35,7 @@ pub unsafe fn init_kernel_heap() {
     let start = core::ptr::addr_of_mut!(__kernel_end) as usize | KERNEL_VIRTUAL_MEM_SPACE;
     let size = LEVEL2_BLOCK_SIZE * 2;
 
-    allocate_memory(start, size, NORMAL_MEM | UXN | WRITABLE).unwrap();
+    allocate_memory(start, size, PhysSource::Any, NORMAL_MEM | UXN | WRITABLE).unwrap();
     let heap = core::ptr::addr_of_mut!(GLOBAL_ALLOCATOR);
     (*heap).init(start, start + size);
 }
@@ -42,6 +44,7 @@ pub unsafe fn init_kernel_heap() {
 fn panic(_panic: &PanicInfo) -> ! {
     loop {
         println!("Panic: {}", _panic.message());
+        sleep_s(1);
     }
 }
 
@@ -77,8 +80,14 @@ pub fn get_current_el() -> u64 {
     el >> 2
 }
 
+static mut KERNEL_INITIALIZED: bool = false;
+
 pub fn initialize_kernel() {
+    if unsafe { KERNEL_INITIALIZED } {
+        return;
+    }
     unsafe { init_kernel_heap() };
     logger::set_logger(Box::new(DefaultLogger));
     initialize_interrupt_handler();
+    unsafe { KERNEL_INITIALIZED = true };
 }
