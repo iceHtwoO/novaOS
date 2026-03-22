@@ -13,8 +13,8 @@ use crate::{
 static EL1_STACK_TOP: usize = STACK_START_ADDR | KERNEL_VIRTUAL_MEM_SPACE;
 const EL1_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
 #[no_mangle]
-static EL0_STACK_TOP: usize = STACK_START_ADDR;
-const EL0_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
+pub static EL0_STACK_TOP: usize = STACK_START_ADDR;
+pub const EL0_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
 
 pub const MAILBOX_VIRTUAL_ADDRESS: VirtAddr = 0xFFFF_FF81_FFFF_E000;
 pub static mut MAILBOX_PHYSICAL_ADDRESS: Option<PhysAddr> = None;

@@ -15,7 +15,7 @@ use nova::{
     configuration::memory_mapping::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el,
-    interrupt_handlers::{enable_irq_source, IRQSource},
+    interrupt_handlers::irq::{enable_irq_source, IRQSource},
     peripherals::{
         gpio::{
             blink_gpio, gpio_pull_up, set_falling_edge_detect, set_gpio_function, GPIOFunction,
@@ -135,9 +135,6 @@ pub extern "C" fn el0() -> ! {
     }
 
     loop {
-        // TODO: Mailbox requires a physical address. The stack is now in VA space causing an issue.
-        // Fix with SVCs ?
-
         let temp = syscall(67);
         println!("{} °C", temp / 1000);
 

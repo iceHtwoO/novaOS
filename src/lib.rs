@@ -17,7 +17,7 @@ use crate::{
         allocate_memory, PhysSource, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN,
         WRITABLE,
     },
-    interrupt_handlers::initialize_interrupt_handler,
+    interrupt_handlers::irq::initialize_interrupt_handler,
     logger::DefaultLogger,
     pi3::timer::sleep_s,
 };

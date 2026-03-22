@@ -1,19 +1,8 @@
 use core::arch::asm;
 
-use alloc::vec::Vec;
-
 use crate::{
-    aarch64::registers::{
-        daif::{mask_all, unmask_irq},
-        read_elr_el1, read_esr_el1, read_exception_source_el,
-    },
-    get_current_el,
-    peripherals::{
-        gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
-        uart::clear_uart_interrupt_state,
-    },
-    pi3::mailbox,
-    println, read_address, write_address,
+    aarch64::registers::{daif::mask_all, read_esr_el1, read_exception_source_el},
+    get_current_el, println,
 };
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
@@ -48,32 +37,6 @@ pub struct TrapFrame {
     pub x30: u64,
 }
 
-struct InterruptHandlers {
-    source: IRQSource,
-    function: fn(),
-}
-
-// TODO: replace with hashmap and check for better alternatives for option
-static mut INTERRUPT_HANDLERS: Option<Vec<InterruptHandlers>> = None;
-
-#[derive(Clone)]
-#[repr(u32)]
-pub enum IRQSource {
-    AuxInt = 29,
-    I2cSpiSlvInt = 44,
-    Pwa0 = 45,
-    Pwa1 = 46,
-    Smi = 48,
-    GpioInt0 = 49,
-    GpioInt1 = 50,
-    GpioInt2 = 51,
-    GpioInt3 = 52,
-    I2cInt = 53,
-    SpiInt = 54,
-    PcmInt = 55,
-    UartInt = 57,
-}
-
 /// Representation of the ESR_ELx registers
 ///
 ///  Reference: D1.10.4
@@ -95,28 +58,8 @@ impl From<u32> for EsrElX {
     }
 }
 
-#[no_mangle]
-unsafe extern "C" fn rust_irq_handler() {
-    mask_all();
-    let pending_irqs = get_irq_pending_sources();
-
-    if pending_irqs & GPIO_PENDING_BIT_OFFSET != 0 {
-        handle_gpio_interrupt();
-        let source_el = read_exception_source_el() >> 2;
-        println!("Source EL: {}", source_el);
-        println!("Current EL: {}", get_current_el());
-        println!("Return register address: {:#x}", read_esr_el1());
-    }
-
-    if let Some(handler_vec) = unsafe { &*core::ptr::addr_of_mut!(INTERRUPT_HANDLERS) } {
-        for handler in handler_vec {
-            if (pending_irqs & (1 << (handler.source.clone() as u32))) != 0 {
-                (handler.function)();
-                clear_interrupt_for_source(handler.source.clone());
-            }
-        }
-    }
-}
+pub mod irq;
+pub mod synchronous;
 
 #[no_mangle]
 unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
@@ -131,143 +74,9 @@ unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
     println!("-------------------------------------");
 }
 
-/// Synchronous Exception Handler
-///
-/// Source is a lower Exception level, where the implemented level
-/// immediately lower than the target level is using
-/// AArch64.
-#[no_mangle]
-unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut TrapFrame) -> usize {
-    mask_all();
-    let esr: EsrElX = EsrElX::from(read_esr_el1());
-    match esr.ec {
-        0b100100 => {
-            println!("Cause: Data Abort from a lower Exception level");
-            log_sync_exception();
-        }
-        0b010101 => {
-            println!("Cause: SVC instruction execution in AArch64");
-            return handle_svc(frame);
-        }
-        _ => {
-            println!("Unknown Error Code: {:b}", esr.ec);
-        }
-    }
-    println!("Returning to kernel main...");
-
-    set_return_to_kernel_main();
-    0
-}
-
-fn handle_svc(frame: &mut TrapFrame) -> usize {
-    match frame.x8 {
-        67 => {
-            let response = mailbox::read_soc_temp([0]).unwrap();
-            response[1] as usize
-        }
-        _ => 0,
-    }
-}
-
-fn log_sync_exception() {
-    let source_el = read_exception_source_el() >> 2;
-    println!("--------Sync Exception in EL{}--------", source_el);
-    println!("Exception escalated to EL {}", get_current_el());
-    println!("Current EL: {}", get_current_el());
-    let esr: EsrElX = EsrElX::from(read_esr_el1());
-    println!("{:?}", esr);
-    println!("Return address: {:#x}", read_elr_el1());
-    println!("-------------------------------------");
-}
-
-fn clear_interrupt_for_source(source: IRQSource) {
-    match source {
-        IRQSource::UartInt => clear_uart_interrupt_state(),
-        _ => {
-            todo!()
-        }
-    }
-}
-
 fn set_return_to_kernel_main() {
     unsafe {
         asm!("ldr x0, =kernel_main", "msr ELR_EL1, x0");
         asm!("mov x0, #(0b0101)", "msr SPSR_EL1, x0");
-    }
-}
-
-fn handle_gpio_interrupt() {
-    println!("Interrupt");
-    for i in 0..=53u32 {
-        let val = read_gpio_event_detect_status(i);
-
-        if val {
-            #[allow(clippy::single_match)]
-            match i {
-                26 => {
-                    println!("Button Pressed");
-                }
-                _ => {}
-            }
-            // Reset GPIO Interrupt handler by writing a 1
-            reset_gpio_event_detect_status(i);
-        }
-    }
-    unmask_irq();
-}
-
-/// Enables IRQ Source
-pub fn enable_irq_source(state: IRQSource) {
-    let nr = state as u32;
-    let register = ENABLE_IRQ_BASE + 4 * (nr / 32);
-    let register_offset = nr % 32;
-    let current = unsafe { read_address(register) };
-    let mask = 0b1 << register_offset;
-    let new_val = current | mask;
-    unsafe { write_address(register, new_val) };
-}
-
-/// Disable IRQ Source
-pub fn disable_irq_source(state: IRQSource) {
-    let nr = state as u32;
-    let register = DISABLE_IRQ_BASE + 4 * (nr / 32);
-    let register_offset = nr % 32;
-    let current = unsafe { read_address(register) };
-    let mask = 0b1 << register_offset;
-    let new_val = current | mask;
-    unsafe { write_address(register, new_val) };
-}
-
-/// Read current IRQ Source status
-pub fn read_irq_source_status(state: IRQSource) -> u32 {
-    let nr = state as u32;
-    let register = ENABLE_IRQ_BASE + 4 * (nr / 32);
-    let register_offset = nr % 32;
-    (unsafe { read_address(register) } >> register_offset) & 0b1
-}
-
-/// Status if a IRQ Source is pending
-pub fn is_irq_source_pending(state: IRQSource) -> bool {
-    let nr = state as u32;
-    let register = IRQ_PENDING_BASE + 4 * (nr / 32);
-    let register_offset = nr % 32;
-    ((unsafe { read_address(register) } >> register_offset) & 0b1) != 0
-}
-
-/// Status if a IRQ Source is pending
-pub fn get_irq_pending_sources() -> u64 {
-    let mut pending = unsafe { read_address(IRQ_PENDING_BASE + 4) as u64 } << 32;
-    pending |= unsafe { read_address(IRQ_PENDING_BASE) as u64 };
-    pending
-}
-
-#[inline(always)]
-pub fn initialize_interrupt_handler() {
-    unsafe { INTERRUPT_HANDLERS = Some(Vec::new()) };
-}
-
-pub fn register_interrupt_handler(source: IRQSource, function: fn()) {
-    if let Some(handler_vec) = unsafe { &mut *core::ptr::addr_of_mut!(INTERRUPT_HANDLERS) } {
-        handler_vec.push(InterruptHandlers { source, function });
     }
 }
