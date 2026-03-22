@@ -3,8 +3,9 @@ use crate::{
     get_current_el,
     interrupt_handlers::{set_return_to_kernel_main, EsrElX, TrapFrame},
     pi3::mailbox,
-    println,
 };
+
+use log::{debug, error, info};
 
 /// Synchronous Exception Handler
 ///
@@ -15,21 +16,22 @@ use crate::{
 unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut TrapFrame) -> usize {
     mask_all();
     let esr: EsrElX = EsrElX::from(read_esr_el1());
+    debug!("Synchronous interrupt from lower EL triggered");
+    log_sync_exception();
     match esr.ec {
         0b100100 => {
-            log_sync_exception();
-            println!("Cause: Data Abort from a lower Exception level");
+            debug!("Cause: Data Abort from a lower Exception level");
         }
         0b010101 => {
-            println!("Cause: SVC instruction execution in AArch64");
+            debug!("Cause: SVC instruction execution in AArch64");
             return handle_svc(frame);
         }
         _ => {
-            println!("Unknown Error Code: {:b}", esr.ec);
+            error!("Synchronous interrupt: Unknown Error Code: {:b}", esr.ec);
         }
     }
-    println!("Returning to kernel main...");
 
+    info!("Returning to kernel main...");
     set_return_to_kernel_main();
     0
 }
@@ -46,11 +48,11 @@ fn handle_svc(frame: &mut TrapFrame) -> usize {
 
 fn log_sync_exception() {
     let source_el = read_exception_source_el() >> 2;
-    println!("--------Sync Exception in EL{}--------", source_el);
-    println!("Exception escalated to EL {}", get_current_el());
-    println!("Current EL: {}", get_current_el());
+    debug!("--------Sync Exception in EL{}--------", source_el);
+    debug!("Exception escalated to EL {}", get_current_el());
+    debug!("Current EL: {}", get_current_el());
     let esr: EsrElX = EsrElX::from(read_esr_el1());
-    println!("{:?}", esr);
-    println!("Return address: {:#x}", read_elr_el1());
-    println!("-------------------------------------");
+    debug!("{:?}", esr);
+    debug!("Return address: {:#x}", read_elr_el1());
+    debug!("-------------------------------------");
 }

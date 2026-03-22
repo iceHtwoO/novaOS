@@ -15,6 +15,8 @@ use crate::{
     println, read_address, write_address,
 };
 use alloc::vec::Vec;
+use log::{debug, info};
+
 struct InterruptHandlers {
     source: IRQSource,
     function: fn(),
@@ -60,9 +62,9 @@ unsafe extern "C" fn rust_irq_handler() {
     if pending_irqs & GPIO_PENDING_BIT_OFFSET != 0 {
         handle_gpio_interrupt();
         let source_el = read_exception_source_el() >> 2;
-        println!("Source EL: {}", source_el);
-        println!("Current EL: {}", get_current_el());
-        println!("Return register address: {:#x}", read_esr_el1());
+        debug!("Source EL: {}", source_el);
+        debug!("Current EL: {}", get_current_el());
+        debug!("Return register address: {:#x}", read_esr_el1());
     }
 
     if let Some(handler_vec) = unsafe { &*core::ptr::addr_of_mut!(INTERRUPT_HANDLERS) } {
@@ -76,7 +78,7 @@ unsafe extern "C" fn rust_irq_handler() {
 }
 
 fn handle_gpio_interrupt() {
-    println!("Interrupt");
+    debug!("GPIO interrupt triggered");
     for i in 0..=53u32 {
         let val = read_gpio_event_detect_status(i);
 
@@ -84,7 +86,7 @@ fn handle_gpio_interrupt() {
             #[allow(clippy::single_match)]
             match i {
                 26 => {
-                    println!("Button Pressed");
+                    info!("Button Pressed");
                 }
                 _ => {}
             }

@@ -2,8 +2,9 @@ use core::arch::asm;
 
 use crate::{
     aarch64::registers::{daif::mask_all, read_esr_el1, read_exception_source_el},
-    get_current_el, println,
+    get_current_el,
 };
+use log::debug;
 
 const INTERRUPT_BASE: u32 = 0x3F00_B000;
 const IRQ_PENDING_BASE: u32 = INTERRUPT_BASE + 0x204;
@@ -66,12 +67,12 @@ unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
     mask_all();
 
     let source_el = read_exception_source_el() >> 2;
-    println!("--------Sync Exception in EL{}--------", source_el);
-    println!("No EL change");
-    println!("Current EL: {}", get_current_el());
-    println!("{:?}", EsrElX::from(read_esr_el1()));
-    println!("Return register address: {:#x}", read_esr_el1());
-    println!("-------------------------------------");
+    debug!("--------Sync Exception in EL{}--------", source_el);
+    debug!("No EL change");
+    debug!("Current EL: {}", get_current_el());
+    debug!("{:?}", EsrElX::from(read_esr_el1()));
+    debug!("Return register address: {:#x}", read_esr_el1());
+    debug!("-------------------------------------");
 }
 
 fn set_return_to_kernel_main() {

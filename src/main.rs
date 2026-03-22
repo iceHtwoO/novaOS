@@ -6,6 +6,7 @@ use core::{
     arch::{asm, global_asm},
     ptr::write_volatile,
 };
+use log::{debug, info};
 
 extern crate alloc;
 
@@ -14,7 +15,7 @@ use nova::{
     aarch64::registers::{daif, read_id_aa64mmfr0_el1},
     configuration::memory_mapping::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
-    get_current_el,
+    get_current_el, init_logger,
     interrupt_handlers::irq::{enable_irq_source, IRQSource},
     peripherals::{
         gpio::{
@@ -60,16 +61,18 @@ pub extern "C" fn main() -> ! {
 
     // Set ACT Led to Outout
     let _ = set_gpio_function(21, GPIOFunction::Output);
+    init_logger();
 
-    println!("Hello World!");
-    println!("Exception level: {}", get_current_el());
+    info!("Hello World!");
+    info!("Current exception level: {}", get_current_el());
 
+    info!("initializing MMU...");
     initialize_mmu_translation_tables();
     unsafe { configure_mmu_el1() };
-    println!("MMU initialized...");
+    info!("MMU configured!");
 
-    println!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
-    println!("Moving El2->EL1");
+    debug!("Register: AA64MMFR0_EL1: {:064b}", read_id_aa64mmfr0_el1());
+    info!("Moving El2->EL1");
     unsafe { FRAMEBUFFER = Some(FrameBuffer::default()) };
 
     unsafe {
@@ -90,15 +93,16 @@ unsafe fn zero_bss() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() -> ! {
-    println!("Kernel Start...");
     nova::initialize_kernel();
+    info!("Kernel Initialized...");
+    info!("Current exception Level: {}", get_current_el());
+
     let mut test_vector = Vec::new();
     for i in 0..20 {
         test_vector.push(i);
     }
-    println!("heap allocation test: {:?}", test_vector);
+    debug!("heap allocation test: {:?}", test_vector);
 
-    println!("Exception Level: {}", get_current_el());
     daif::unmask_all();
 
     unsafe {
@@ -136,7 +140,6 @@ pub extern "C" fn el0() -> ! {
 
     loop {
         let temp = syscall(67);
-        println!("{} °C", temp / 1000);
 
         blink_gpio(SpecificGpio::OnboardLed as u8, 500);
     }
