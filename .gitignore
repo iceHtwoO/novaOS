@@ -5,3 +5,4 @@ sd.img
 settings.json
 .DS_Store
 .venv
+.nvimlog

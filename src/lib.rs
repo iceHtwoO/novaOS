@@ -3,12 +3,13 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
 use core::{
     arch::asm,
     panic::PanicInfo,
     ptr::{read_volatile, write_volatile},
 };
+use log::LevelFilter;
+use log::{Level, Metadata, Record};
 
 use heap::Heap;
 
@@ -18,10 +19,11 @@ use crate::{
         WRITABLE,
     },
     interrupt_handlers::irq::initialize_interrupt_handler,
-    logger::DefaultLogger,
     pi3::timer::sleep_s,
+    terminal::{flush_terminal, init_terminal},
 };
 
+static LOGGER: UartLogger = UartLogger;
 static PERIPHERAL_BASE: usize = 0x3F00_0000;
 
 unsafe extern "C" {
@@ -31,7 +33,7 @@ unsafe extern "C" {
 #[global_allocator]
 pub static mut GLOBAL_ALLOCATOR: Heap = Heap::empty();
 
-pub unsafe fn init_kernel_heap() {
+pub unsafe fn initialize_kernel_heap() {
     let start = core::ptr::addr_of_mut!(__kernel_end) as usize | KERNEL_VIRTUAL_MEM_SPACE;
     let size = LEVEL2_BLOCK_SIZE * 2;
 
@@ -54,9 +56,9 @@ pub mod aarch64;
 pub mod configuration;
 pub mod framebuffer;
 pub mod interrupt_handlers;
-pub mod logger;
 
 pub mod pi3;
+pub mod terminal;
 
 #[inline(always)]
 pub unsafe fn read_address(address: u32) -> u32 {
@@ -80,14 +82,33 @@ pub fn get_current_el() -> u64 {
     el >> 2
 }
 
-static mut KERNEL_INITIALIZED: bool = false;
-
 pub fn initialize_kernel() {
-    if unsafe { KERNEL_INITIALIZED } {
-        return;
-    }
-    unsafe { init_kernel_heap() };
-    logger::set_logger(Box::new(DefaultLogger));
+    unsafe { initialize_kernel_heap() };
     initialize_interrupt_handler();
-    unsafe { KERNEL_INITIALIZED = true };
+    init_terminal();
+}
+
+struct UartLogger;
+
+impl log::Log for UartLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Debug
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            println!("{} - {}", record.level(), record.args());
+            if record.level() <= Level::Info {
+                flush_terminal();
+            }
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+pub fn init_logger() {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(LevelFilter::Debug))
+        .unwrap();
 }

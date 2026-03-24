@@ -11,4 +11,5 @@ pub enum NovaError {
     Misalignment,
     InvalidGranularity,
     Paging,
+    OutOfMeomory,
 }

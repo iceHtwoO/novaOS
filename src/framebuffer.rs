@@ -4,10 +4,8 @@ mod bitmaps;
 
 use bitmaps::BASIC_LEGACY;
 
-use crate::{
-    pi3::mailbox::{read_mailbox, write_mailbox},
-    println,
-};
+use crate::pi3::mailbox::{read_mailbox, write_mailbox};
+use log::error;
 #[repr(align(16))]
 struct Mailbox([u32; 36]);
 
@@ -237,7 +235,7 @@ impl Default for FrameBuffer {
 
         let _ = read_mailbox(8);
         if mailbox.0[1] == 0 {
-            println!("Failed");
+            error!("Mailbox request was not processed!");
         }
 
         mailbox.0[28] &= 0x3FFFFFFF;

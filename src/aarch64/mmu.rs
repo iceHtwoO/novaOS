@@ -106,6 +106,18 @@ pub enum PhysSource {
 #[repr(align(4096))]
 pub struct PageTable([TableEntry; TABLE_ENTRY_COUNT]);
 
+impl Iterator for PageTable {
+    type Item = VirtAddr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for (offset, entity) in self.0.iter().enumerate() {
+            if entity.is_invalid() {
+                return Some(offset);
+            }
+        }
+        None
+    }
+}
 #[no_mangle]
 pub static mut TRANSLATIONTABLE_TTBR0: PageTable = PageTable([TableEntry { value: 0 }; 512]);
 #[no_mangle]
@@ -197,7 +209,7 @@ fn map_range_dynamic(
 
 /// Allocate a singe page.
 pub fn alloc_page(
-    virtual_address: usize,
+    virtual_address: VirtAddr,
     base_table: *mut PageTable,
     additional_flags: u64,
 ) -> Result<(), NovaError> {
@@ -207,6 +219,28 @@ pub fn alloc_page(
         base_table,
         additional_flags,
     )
+}
+
+/// Allocate a singe page in one block.
+pub fn find_free_kerne_page_in_block(start: VirtAddr) -> Result<VirtAddr, NovaError> {
+    if !start.is_multiple_of(GRANULARITY) {
+        return Err(NovaError::Misalignment);
+    }
+
+    let (off1, off2, _) = virtual_address_to_table_offset(start);
+    let offsets = [off1, off2];
+    let table = unsafe {
+        &mut *navigate_table(
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1),
+            &offsets,
+            true,
+        )?
+    };
+
+    if let Some(virt_addr) = table.next() {
+        return Ok(virt_addr);
+    }
+    Err(NovaError::OutOfMeomory)
 }
 
 /// Allocate a single page at an explicit `physical_address`.

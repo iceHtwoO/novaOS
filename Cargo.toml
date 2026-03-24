@@ -17,6 +17,7 @@ libm = "0.2.15"
 heap = {path = "workspace/heap"}
 nova_error = {path = "workspace/nova_error"}
 paste = "1.0.15"
+log = "0.4.29"
 
 [workspace]
 
