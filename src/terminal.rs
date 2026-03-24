@@ -1,5 +1,6 @@
+use core::arch::asm;
+
 use alloc::string::String;
-use log::info;
 
 use crate::{
     interrupt_handlers::irq::{register_interrupt_handler, IRQSource},
@@ -12,6 +13,16 @@ pub static mut TERMINAL: Option<Terminal> = None;
 
 pub struct Terminal {
     input: String,
+}
+
+extern "C" {
+    fn el1_to_el0();
+}
+
+impl Default for Terminal {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Terminal {
@@ -27,10 +38,18 @@ impl Terminal {
 
     fn exec(&mut self) {
         print!("\n");
-        match self.input.as_str() {
+        let val = self.input.clone();
+        self.input.clear();
+
+        match val.as_str() {
             "temp" => {
                 println!("{}", read_soc_temp([0]).unwrap()[1]);
             }
+            "el0" => unsafe {
+                let i = 69;
+                asm!("", in("x0") i);
+                el1_to_el0();
+            },
             _ => {
                 println!("Unknown command: \"{}\"", self.input);
             }
@@ -38,6 +57,7 @@ impl Terminal {
         self.input.clear();
     }
 }
+
 pub fn init_terminal() {
     unsafe { TERMINAL = Some(Terminal::new()) };
     register_terminal_interrupt_handler();

@@ -12,7 +12,7 @@ use crate::{
         gpio::{read_gpio_event_detect_status, reset_gpio_event_detect_status},
         uart::clear_uart_interrupt_state,
     },
-    println, read_address, write_address,
+    read_address, write_address,
 };
 use alloc::vec::Vec;
 use log::{debug, info};

@@ -19,6 +19,8 @@ pub const EL0_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
 pub const MAILBOX_VIRTUAL_ADDRESS: VirtAddr = 0xFFFF_FF81_FFFF_E000;
 pub static mut MAILBOX_PHYSICAL_ADDRESS: Option<PhysAddr> = None;
 
+pub const APPLICATION_TRANSLATION_TABLE_VA: VirtAddr = 0xFFFF_FF81_FE00_0000;
+
 extern "C" {
     static __text_end: u64;
     static __share_end: u64;
@@ -99,6 +101,7 @@ pub fn initialize_mmu_translation_tables() {
     )
     .unwrap();
 
+    // Allocate Mailbox buffer
     {
         let addr = reserve_page();
         unsafe { MAILBOX_PHYSICAL_ADDRESS = Some(addr) };

@@ -1,11 +1,11 @@
 use crate::{
     aarch64::registers::{daif::mask_all, read_elr_el1, read_esr_el1, read_exception_source_el},
     get_current_el,
-    interrupt_handlers::{set_return_to_kernel_main, EsrElX, TrapFrame},
+    interrupt_handlers::{set_return_to_kernel_loop, EsrElX, TrapFrame},
     pi3::mailbox,
 };
 
-use log::{debug, error, info};
+use log::{debug, error, warn};
 
 /// Synchronous Exception Handler
 ///
@@ -20,7 +20,7 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut Tr
     log_sync_exception();
     match esr.ec {
         0b100100 => {
-            debug!("Cause: Data Abort from a lower Exception level");
+            warn!("Cause: Data Abort from a lower Exception level");
         }
         0b010101 => {
             debug!("Cause: SVC instruction execution in AArch64");
@@ -31,8 +31,8 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut Tr
         }
     }
 
-    info!("Returning to kernel main...");
-    set_return_to_kernel_main();
+    warn!("UnhandledException -> Returning to kernel...");
+    set_return_to_kernel_loop();
     0
 }
 

@@ -24,7 +24,7 @@ use nova::{
         },
         uart::uart_init,
     },
-    println,
+    print, println,
 };
 
 global_asm!(include_str!("vector.S"));
@@ -34,7 +34,6 @@ static mut FRAMEBUFFER: Option<FrameBuffer> = None;
 
 extern "C" {
     fn el2_to_el1();
-    fn el1_to_el0();
     fn configure_mmu_el1();
     static mut __bss_start: u32;
     static mut __bss_end: u32;
@@ -92,7 +91,7 @@ unsafe fn zero_bss() {
 }
 
 #[no_mangle]
-pub extern "C" fn kernel_main() -> ! {
+pub extern "C" fn kernel_main() {
     nova::initialize_kernel();
     info!("Kernel Initialized...");
     info!("Current exception Level: {}", get_current_el());
@@ -103,18 +102,21 @@ pub extern "C" fn kernel_main() -> ! {
     }
     debug!("heap allocation test: {:?}", test_vector);
 
-    daif::unmask_all();
+    enable_irq_source(IRQSource::UartInt);
 
-    unsafe {
-        el1_to_el0();
-    };
+    kernel_loop();
+}
+
+#[no_mangle]
+pub extern "C" fn kernel_loop() {
+    daif::unmask_all();
 
     #[allow(clippy::empty_loop)]
     loop {}
 }
 
 #[no_mangle]
-pub extern "C" fn el0() -> ! {
+pub extern "C" fn el0(input: usize) {
     println!("Jumped into EL0");
 
     // Set GPIO 26 to Input
@@ -122,8 +124,6 @@ pub extern "C" fn el0() -> ! {
     let _ = set_gpio_function(26, GPIOFunction::Input);
     gpio_pull_up(26);
     set_falling_edge_detect(26, true);
-
-    enable_irq_source(IRQSource::UartInt);
 
     if let Some(fb) = unsafe { FRAMEBUFFER.as_mut() } {
         for i in 0..1080 {
@@ -138,11 +138,27 @@ pub extern "C" fn el0() -> ! {
         fb.draw_function(cos, 0, 101, RED);
     }
 
-    loop {
-        let temp = syscall(67);
+    let _temp = syscall(67);
 
-        blink_gpio(SpecificGpio::OnboardLed as u8, 500);
+    println!("Calculting prime to: {}", input);
+
+    for i in 3..input {
+        let mut is_prime = true;
+        for j in 3..i {
+            if i == j {
+                continue;
+            }
+            if i % j == 0 {
+                is_prime = false;
+            }
+        }
+        if is_prime {
+            print!("{} ", i);
+        }
     }
+    println!("");
+
+    blink_gpio(SpecificGpio::OnboardLed as u8, 500);
 }
 
 fn cos(x: u32) -> f64 {

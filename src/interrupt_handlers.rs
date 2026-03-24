@@ -75,9 +75,9 @@ unsafe extern "C" fn rust_synchronous_interrupt_no_el_change() {
     debug!("-------------------------------------");
 }
 
-fn set_return_to_kernel_main() {
+fn set_return_to_kernel_loop() {
     unsafe {
-        asm!("ldr x0, =kernel_main", "msr ELR_EL1, x0");
+        asm!("ldr x0, =kernel_loop", "msr ELR_EL1, x0");
         asm!("mov x0, #(0b0101)", "msr SPSR_EL1, x0");
     }
 }

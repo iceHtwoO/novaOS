@@ -77,7 +77,7 @@ configure_mmu_el1:
 .align 4
 .global el1_to_el0
 el1_to_el0:
-
+    mov x8, x0
     // Set SPSR_EL1: return to EL0t
     mov x0, #(0b0000)
     msr SPSR_EL1, x0
@@ -93,5 +93,6 @@ el1_to_el0:
 
     isb
 
+    mov x0, x8
     // Return to EL0
     eret

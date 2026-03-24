@@ -58,15 +58,12 @@
       ],
       "preLaunchTask": "Run QEMU wo window"
     },
-
     {
-      "name": "Attach LLDB",
+      "name": "LLDB",
       "type": "lldb",
-      "request": "attach",
-      "debugServer": 1234,
+      "request": "launch",
       "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
-      "stopOnEntry": true,
-      "processCreateCommands": ["gdb-remote localhost:1234"]
+      "preLaunchTask": "Run QEMU wo window"
     }
   ]
 }

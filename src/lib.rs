@@ -18,9 +18,7 @@ use crate::{
         allocate_memory, PhysSource, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN,
         WRITABLE,
     },
-    interrupt_handlers::irq::{
-        initialize_interrupt_handler, register_interrupt_handler, IRQSource,
-    },
+    interrupt_handlers::irq::initialize_interrupt_handler,
     pi3::timer::sleep_s,
     terminal::{flush_terminal, init_terminal},
 };
@@ -35,7 +33,7 @@ unsafe extern "C" {
 #[global_allocator]
 pub static mut GLOBAL_ALLOCATOR: Heap = Heap::empty();
 
-pub unsafe fn init_kernel_heap() {
+pub unsafe fn initialize_kernel_heap() {
     let start = core::ptr::addr_of_mut!(__kernel_end) as usize | KERNEL_VIRTUAL_MEM_SPACE;
     let size = LEVEL2_BLOCK_SIZE * 2;
 
@@ -84,25 +82,17 @@ pub fn get_current_el() -> u64 {
     el >> 2
 }
 
-static mut KERNEL_INITIALIZED: bool = false;
-
 pub fn initialize_kernel() {
-    if unsafe { KERNEL_INITIALIZED } {
-        return;
-    }
-
-    unsafe { init_kernel_heap() };
+    unsafe { initialize_kernel_heap() };
     initialize_interrupt_handler();
     init_terminal();
-
-    unsafe { KERNEL_INITIALIZED = true };
 }
 
 struct UartLogger;
 
 impl log::Log for UartLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= Level::Debug
     }
 
     fn log(&self, record: &Record) {
