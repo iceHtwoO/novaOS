@@ -1,10 +1,9 @@
 use crate::{
     aarch64::mmu::{
-        alloc_block_l2_explicit, allocate_memory, map_l2_block, map_page,
-        physical_mapping::reserve_page, reserve_range, PhysAddr, PhysSource, VirtAddr, DEVICE_MEM,
-        EL0_ACCESSIBLE, GRANULARITY, KERNEL_VIRTUAL_MEM_SPACE, LEVEL1_BLOCK_SIZE,
-        LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY, STACK_START_ADDR, TRANSLATIONTABLE_TTBR0,
-        UXN, WRITABLE,
+        alloc_block_l2_explicit, allocate_memory, map_page, physical_mapping::reserve_page,
+        reserve_range, PhysAddr, PhysSource, VirtAddr, DEVICE_MEM, EL0_ACCESSIBLE, GRANULARITY,
+        KERNEL_VIRTUAL_MEM_SPACE, LEVEL1_BLOCK_SIZE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, PXN, READ_ONLY,
+        STACK_START_ADDR, TRANSLATIONTABLE_TTBR0, TRANSLATIONTABLE_TTBR1, UXN, WRITABLE,
     },
     PERIPHERAL_BASE,
 };
@@ -44,6 +43,16 @@ pub fn initialize_mmu_translation_tables() {
         .unwrap();
     }
 
+    for addr in (0..text_end).step_by(GRANULARITY) {
+        map_page(
+            addr | KERNEL_VIRTUAL_MEM_SPACE,
+            addr,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1),
+            READ_ONLY | NORMAL_MEM,
+        )
+        .unwrap();
+    }
+
     for addr in (text_end..shared_segment_end).step_by(GRANULARITY) {
         map_page(
             addr,
@@ -54,12 +63,12 @@ pub fn initialize_mmu_translation_tables() {
         .unwrap();
     }
 
-    for addr in (shared_segment_end..kernel_end).step_by(LEVEL2_BLOCK_SIZE) {
-        map_l2_block(
+    for addr in (text_end..shared_segment_end).step_by(GRANULARITY) {
+        map_page(
+            addr | KERNEL_VIRTUAL_MEM_SPACE,
             addr,
-            addr,
-            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR0),
-            WRITABLE | UXN | NORMAL_MEM,
+            core::ptr::addr_of_mut!(TRANSLATIONTABLE_TTBR1),
+            EL0_ACCESSIBLE | WRITABLE | NORMAL_MEM,
         )
         .unwrap();
     }

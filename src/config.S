@@ -10,8 +10,12 @@ el2_to_el1:
     msr SPSR_EL2, x0
 
     // Set return address to kernel_main
+    adrp x0, KERNEL_VIRTUAL_MEM_SPACE
+    ldr x1, [x0, :lo12:KERNEL_VIRTUAL_MEM_SPACE]
+
     adrp x0, kernel_main
     add  x0, x0, :lo12:kernel_main
+    orr  x0, x0, x1
     msr ELR_EL2, x0
 
     // Set SP_EL1 to stack base
