@@ -13,6 +13,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use nova::{
     aarch64::registers::{daif, read_id_aa64mmfr0_el1},
+    application_manager::{add_app, Application},
     configuration::memory_mapping::initialize_mmu_translation_tables,
     framebuffer::{FrameBuffer, BLUE, GREEN, RED},
     get_current_el, init_logger,
@@ -77,7 +78,6 @@ pub extern "C" fn main() -> ! {
     unsafe {
         el2_to_el1();
     }
-
     #[allow(clippy::empty_loop)]
     loop {}
 }
@@ -103,6 +103,9 @@ pub extern "C" fn kernel_main() {
     debug!("heap allocation test: {:?}", test_vector);
 
     enable_irq_source(IRQSource::UartInt);
+
+    let app = Application::new(el0 as *const () as usize);
+    add_app(app);
 
     kernel_loop();
 }

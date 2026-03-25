@@ -18,6 +18,8 @@ pub const EL0_STACK_SIZE: usize = LEVEL2_BLOCK_SIZE * 2;
 pub const MAILBOX_VIRTUAL_ADDRESS: VirtAddr = 0xFFFF_FF81_FFFF_E000;
 pub static mut MAILBOX_PHYSICAL_ADDRESS: Option<PhysAddr> = None;
 
+// TODO: Currently limited to 512 applications, more than enough, but has to be kept
+// in mind
 pub const APPLICATION_TRANSLATION_TABLE_VA: VirtAddr = 0xFFFF_FF81_FE00_0000;
 
 extern "C" {

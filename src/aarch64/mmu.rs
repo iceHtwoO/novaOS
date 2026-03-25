@@ -105,7 +105,7 @@ pub enum PhysSource {
 }
 
 #[repr(align(4096))]
-pub struct PageTable([TableEntry; TABLE_ENTRY_COUNT]);
+pub struct PageTable(pub [TableEntry; TABLE_ENTRY_COUNT]);
 
 impl Iterator for PageTable {
     type Item = VirtAddr;
@@ -204,7 +204,6 @@ fn map_range_dynamic(
         (virt, _) = virt.overflowing_add(GRANULARITY);
         remaining -= GRANULARITY;
     }
-
     Ok(())
 }
 
@@ -224,7 +223,7 @@ pub fn alloc_page(
 
 /// Allocate a singe page in one block.
 pub fn find_free_kerne_page_in_block(start: VirtAddr) -> Result<VirtAddr, NovaError> {
-    if !start.is_multiple_of(GRANULARITY) {
+    if !start.is_multiple_of(LEVEL2_BLOCK_SIZE) {
         return Err(NovaError::Misalignment);
     }
 
@@ -238,8 +237,8 @@ pub fn find_free_kerne_page_in_block(start: VirtAddr) -> Result<VirtAddr, NovaEr
         )?
     };
 
-    if let Some(virt_addr) = table.next() {
-        return Ok(virt_addr);
+    if let Some(offset) = table.next() {
+        return Ok(start + (offset * GRANULARITY));
     }
     Err(NovaError::OutOfMeomory)
 }

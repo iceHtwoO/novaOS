@@ -66,6 +66,16 @@
       "preLaunchTask": "Run QEMU",
       "stopOnEntry": true,
       "processCreateCommands": ["gdb-remote localhost:1234"]
+    },
+
+    {
+      "name": "NVIM LLDB",
+      "type": "codelldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
+      "preLaunchTask": "Run QEMU",
+      "stopOnEntry": true,
+      "processCreateCommands": ["gdb-remote localhost:1234"]
     }
   ]
 }

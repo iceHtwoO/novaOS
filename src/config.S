@@ -78,25 +78,3 @@ configure_mmu_el1:
 
     ret
 
-.align 4
-.global el1_to_el0
-el1_to_el0:
-    mov x8, x0
-    // Set SPSR_EL1: return to EL0t
-    mov x0, #(0b0000)
-    msr SPSR_EL1, x0
-
-    // Set return address to el0
-    ldr x0, =el0
-    msr ELR_EL1, x0
-
-    // Set SP_EL1 to stack base
-    adrp x0, EL0_STACK_TOP
-    ldr  x1, [x0, :lo12:EL0_STACK_TOP]
-    msr SP_EL0, x1
-
-    isb
-
-    mov x0, x8
-    // Return to EL0
-    eret

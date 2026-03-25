@@ -3,6 +3,7 @@ use core::arch::asm;
 use alloc::string::String;
 
 use crate::{
+    application_manager::start_app,
     interrupt_handlers::irq::{register_interrupt_handler, IRQSource},
     peripherals::uart::read_uart_data,
     pi3::mailbox::read_soc_temp,
@@ -13,10 +14,6 @@ pub static mut TERMINAL: Option<Terminal> = None;
 
 pub struct Terminal {
     input: String,
-}
-
-extern "C" {
-    fn el1_to_el0();
 }
 
 impl Default for Terminal {
@@ -48,7 +45,7 @@ impl Terminal {
             "el0" => unsafe {
                 let i = 69;
                 asm!("", in("x0") i);
-                el1_to_el0();
+                start_app(0);
             },
             _ => {
                 println!("Unknown command: \"{}\"", self.input);
