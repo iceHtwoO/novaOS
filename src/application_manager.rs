@@ -7,6 +7,8 @@ use crate::{
 };
 use alloc::vec::Vec;
 use core::arch::asm;
+use log::error;
+use nova_error::NovaError;
 use spin::Mutex;
 
 pub struct Application {
@@ -28,7 +30,7 @@ impl Application {
         )
         .unwrap();
 
-        // TODO: Temporary fix, while kernel and app share some memory regions
+        // TODO: Temporary solution, while kernel and app share some memory regions
         #[allow(static_mut_refs)]
         unsafe {
             let table = &mut *(virtual_address as *mut PageTable);
@@ -40,6 +42,13 @@ impl Application {
             start_addr,
         }
     }
+
+    /// Starts an application.
+    ///
+    /// `ELR_EL1` ->  Exception Link Register (starting virtual address)
+    /// `SPSR_EL1` -> Saved Program State Register (settings for `eret` behaviour)
+    /// `SP_EL0` -> Stack Pointer Register (virtual_address of stack Pointer)
+    /// `TTBR0_EL1` -> Translation Table base Register Register
     pub fn start(&self) {
         unsafe {
             asm!("msr ELR_EL1, {}", in(reg) self.start_addr);
@@ -69,14 +78,27 @@ pub fn initialize_app_manager() {
     let mut guard = APP_MANAGER.lock();
     guard.apps = Some(Vec::new());
 }
-pub fn add_app(app: Application) {
+
+pub fn add_app(app: Application) -> Result<(), NovaError> {
     if let Some(app_list) = APP_MANAGER.lock().apps.as_mut() {
         app_list.push(app);
+        Ok(())
+    } else {
+        Err(NovaError::General("AppManager not initalized."))
     }
 }
 
-pub fn start_app(index: usize) {
-    if let Some(app_list) = APP_MANAGER.lock().apps.as_mut() {
-        app_list[index].start();
+pub fn start_app(index: usize) -> Result<(), NovaError> {
+    if let Some(app) = APP_MANAGER
+        .lock()
+        .apps
+        .as_mut()
+        .and_then(|am| am.get(index))
+    {
+        app.start();
+        unreachable!()
+    } else {
+        error!("Unable to start app due to invalid App ID.");
+        Err(NovaError::General("Invalid app id."))
     }
 }

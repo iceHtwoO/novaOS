@@ -20,11 +20,14 @@ unsafe extern "C" fn rust_synchronous_interrupt_imm_lower_aarch64(frame: &mut Tr
     log_sync_exception();
     match esr.ec {
         0b100100 => {
-            warn!("Cause: Data Abort from a lower Exception level");
+            error!("Cause: Data Abort from a lower Exception level");
         }
         0b010101 => {
             debug!("Cause: SVC instruction execution in AArch64");
             return handle_svc(frame);
+        }
+        0b100010 => {
+            error!("Cause: PC alignment fault.");
         }
         _ => {
             error!("Synchronous interrupt: Unknown Error Code: {:b}", esr.ec);

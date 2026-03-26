@@ -105,7 +105,7 @@ pub extern "C" fn kernel_main() {
     enable_irq_source(IRQSource::UartInt);
 
     let app = Application::new(el0 as *const () as usize);
-    add_app(app);
+    add_app(app).unwrap();
 
     kernel_loop();
 }

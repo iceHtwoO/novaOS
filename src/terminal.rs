@@ -38,14 +38,20 @@ impl Terminal {
         let val = self.input.clone();
         self.input.clear();
 
-        match val.as_str() {
+        let mut parts = val.split(" ");
+
+        match parts.next().unwrap() {
             "temp" => {
                 println!("{}", read_soc_temp([0]).unwrap()[1]);
             }
-            "el0" => unsafe {
-                let i = 69;
-                asm!("", in("x0") i);
-                start_app(0);
+            "app" => unsafe {
+                if let Some(app_id) = parts.next().and_then(|a| a.parse::<usize>().ok()) {
+                    let i = 69;
+                    asm!("", in("x0") i);
+                    let _ = start_app(app_id);
+                } else {
+                    println!("App ID not set.");
+                }
             },
             _ => {
                 println!("Unknown command: \"{}\"", self.input);

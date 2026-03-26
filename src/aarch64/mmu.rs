@@ -273,7 +273,7 @@ pub fn map_page(
     let table = unsafe { &mut *table_ptr };
 
     if !table.0[l3_off].is_invalid() {
-        return Err(NovaError::Paging);
+        return Err(NovaError::Paging("Page already occupied."));
     }
 
     table.0[l3_off] = TableEntry::page_descriptor(physical_address, additional_flags);
@@ -315,7 +315,7 @@ pub fn map_l2_block(
 
     // Verify virtual address is available.
     if !table.0[l2_off].is_invalid() {
-        return Err(NovaError::Paging);
+        return Err(NovaError::Paging("Block already occupied."));
     }
 
     let new_entry = TableEntry::block_descriptor(physical_address, additional_flags);
@@ -392,7 +392,7 @@ fn next_table(
     match table.0[offset].value & 0b11 {
         0 => {
             if !create_missing {
-                return Err(NovaError::Paging);
+                return Err(NovaError::Paging("No table defined."));
             }
             let new_phys_page_table_address = reserve_page();
 
@@ -406,7 +406,9 @@ fn next_table(
 
             Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable)
         }
-        1 => Err(NovaError::Paging),
+        1 => Err(NovaError::Paging(
+            "Can't navigate table due to block mapping.",
+        )),
         3 => Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable),
         _ => unreachable!(),
     }
