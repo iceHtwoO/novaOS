@@ -5,11 +5,12 @@ use core::prelude::rust_2024::derive;
 
 #[derive(Debug)]
 pub enum NovaError {
+    General(&'static str),
     Mailbox,
     HeapFull,
     EmptyHeapSegmentNotAllowed,
     Misalignment,
     InvalidGranularity,
-    Paging,
+    Paging(&'static str),
     OutOfMeomory,
 }

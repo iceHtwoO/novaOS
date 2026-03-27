@@ -24,7 +24,7 @@ pub fn reserve_page_explicit(physical_address: usize) -> Result<PhysAddr, NovaEr
     let word_index = page / 64;
 
     if unsafe { PAGING_BITMAP.bitmap[word_index] } & (1 << (page % 64)) > 0 {
-        return Err(NovaError::Paging);
+        return Err(NovaError::Paging("Page PA already taken."));
     }
 
     unsafe { PAGING_BITMAP.bitmap[word_index] |= 1 << (page % 64) };
@@ -47,7 +47,7 @@ pub fn reserve_block_explicit(physical_address: usize) -> Result<(), NovaError> 
     for i in 0..L2_BLOCK_BITMAP_WORDS {
         unsafe {
             if PAGING_BITMAP.bitmap[(page / 64) + i] != 0 {
-                return Err(NovaError::Paging);
+                return Err(NovaError::Paging("Block PA already taken."));
             }
         };
     }

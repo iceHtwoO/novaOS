@@ -18,6 +18,7 @@ heap = {path = "workspace/heap"}
 nova_error = {path = "workspace/nova_error"}
 paste = "1.0.15"
 log = "0.4.29"
+spin = "0.10.0"
 
 [workspace]
 

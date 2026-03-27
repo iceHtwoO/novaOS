@@ -3,7 +3,7 @@
   "compounds": [
     {
       "name": "Run QEMU + Attach LLDB",
-      "configurations": ["Attach LLDB"],
+      "configurations": ["LLDB"],
       "preLaunchTask": "Run QEMU"
     }
   ],
@@ -61,9 +61,21 @@
     {
       "name": "LLDB",
       "type": "lldb",
-      "request": "launch",
+      "request": "attach",
       "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
-      "preLaunchTask": "Run QEMU wo window"
+      "preLaunchTask": "Run QEMU",
+      "stopOnEntry": true,
+      "processCreateCommands": ["gdb-remote localhost:1234"]
+    },
+
+    {
+      "name": "NVIM LLDB",
+      "type": "codelldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/target/aarch64-unknown-none/debug/nova",
+      "preLaunchTask": "Run QEMU",
+      "stopOnEntry": true,
+      "processCreateCommands": ["gdb-remote localhost:1234"]
     }
   ]
 }

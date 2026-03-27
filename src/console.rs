@@ -1,8 +1,7 @@
-use core::arch::asm;
-
 use alloc::string::String;
 
 use crate::{
+    application_manager::start_app,
     interrupt_handlers::irq::{register_interrupt_handler, IRQSource},
     peripherals::uart::read_uart_data,
     pi3::mailbox::read_soc_temp,
@@ -13,10 +12,6 @@ pub static mut TERMINAL: Option<Terminal> = None;
 
 pub struct Terminal {
     input: String,
-}
-
-extern "C" {
-    fn el1_to_el0();
 }
 
 impl Default for Terminal {
@@ -41,15 +36,20 @@ impl Terminal {
         let val = self.input.clone();
         self.input.clear();
 
-        match val.as_str() {
+        let mut parts = val.split(" ");
+
+        match parts.next().unwrap() {
             "temp" => {
                 println!("{}", read_soc_temp([0]).unwrap()[1]);
             }
-            "el0" => unsafe {
-                let i = 69;
-                asm!("", in("x0") i);
-                el1_to_el0();
-            },
+            "app" => {
+                if let Some(app_id) = parts.next().and_then(|a| a.parse::<usize>().ok()) {
+                    let args = parts.collect();
+                    let _ = start_app(app_id, args);
+                } else {
+                    println!("App ID not set.");
+                }
+            }
             _ => {
                 println!("Unknown command: \"{}\"", self.input);
             }

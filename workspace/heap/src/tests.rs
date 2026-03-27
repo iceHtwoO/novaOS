@@ -29,7 +29,7 @@ fn test_heap_allocation() {
         assert_eq!(actual_alloc_size % MIN_BLOCK_SIZE, 0);
 
         // Verify section is occupied
-        assert!((*malloc_header).free == false);
+        assert!(!(*malloc_header).free);
 
         // Verify next header has been created
         let next = (*malloc_header).next.unwrap();
@@ -55,7 +55,7 @@ fn test_full_heap() {
     let malloc = heap.malloc(malloc_size).unwrap();
     let malloc_header = Heap::get_header_ref_from_data_pointer(malloc);
     unsafe {
-        assert_eq!((*malloc_header).free, false);
+        assert!(!(*malloc_header).free);
         assert!((*malloc_header).next.is_none());
     }
 
@@ -79,7 +79,7 @@ fn test_freeing_root() {
     let malloc = heap.malloc(malloc_size).unwrap();
     let malloc_header = Heap::get_header_ref_from_data_pointer(malloc);
     unsafe {
-        assert_eq!((*malloc_header).free, false);
+        assert!(!(*malloc_header).free);
         assert!((*malloc_header).size >= malloc_size);
         assert!((*root_header).next.is_some());
 

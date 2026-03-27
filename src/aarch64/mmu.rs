@@ -43,7 +43,8 @@ const L2_BLOCK_BITMAP_WORDS: usize = LEVEL2_BLOCK_SIZE / (64 * GRANULARITY);
 const MAX_PAGE_COUNT: usize = 1024 * 1024 * 1024 / GRANULARITY;
 
 const TRANSLATION_TABLE_BASE_ADDR: usize = 0xFFFF_FF82_0000_0000;
-pub const KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
+#[no_mangle]
+pub static KERNEL_VIRTUAL_MEM_SPACE: usize = 0xFFFF_FF80_0000_0000;
 
 pub const STACK_START_ADDR: usize = !KERNEL_VIRTUAL_MEM_SPACE & (!0xF);
 
@@ -104,7 +105,7 @@ pub enum PhysSource {
 }
 
 #[repr(align(4096))]
-pub struct PageTable([TableEntry; TABLE_ENTRY_COUNT]);
+pub struct PageTable(pub [TableEntry; TABLE_ENTRY_COUNT]);
 
 impl Iterator for PageTable {
     type Item = VirtAddr;
@@ -203,7 +204,6 @@ fn map_range_dynamic(
         (virt, _) = virt.overflowing_add(GRANULARITY);
         remaining -= GRANULARITY;
     }
-
     Ok(())
 }
 
@@ -223,7 +223,7 @@ pub fn alloc_page(
 
 /// Allocate a singe page in one block.
 pub fn find_free_kerne_page_in_block(start: VirtAddr) -> Result<VirtAddr, NovaError> {
-    if !start.is_multiple_of(GRANULARITY) {
+    if !start.is_multiple_of(LEVEL2_BLOCK_SIZE) {
         return Err(NovaError::Misalignment);
     }
 
@@ -237,8 +237,8 @@ pub fn find_free_kerne_page_in_block(start: VirtAddr) -> Result<VirtAddr, NovaEr
         )?
     };
 
-    if let Some(virt_addr) = table.next() {
-        return Ok(virt_addr);
+    if let Some(offset) = table.next() {
+        return Ok(start + (offset * GRANULARITY));
     }
     Err(NovaError::OutOfMeomory)
 }
@@ -273,7 +273,7 @@ pub fn map_page(
     let table = unsafe { &mut *table_ptr };
 
     if !table.0[l3_off].is_invalid() {
-        return Err(NovaError::Paging);
+        return Err(NovaError::Paging("Page already occupied."));
     }
 
     table.0[l3_off] = TableEntry::page_descriptor(physical_address, additional_flags);
@@ -315,7 +315,7 @@ pub fn map_l2_block(
 
     // Verify virtual address is available.
     if !table.0[l2_off].is_invalid() {
-        return Err(NovaError::Paging);
+        return Err(NovaError::Paging("Block already occupied."));
     }
 
     let new_entry = TableEntry::block_descriptor(physical_address, additional_flags);
@@ -392,7 +392,7 @@ fn next_table(
     match table.0[offset].value & 0b11 {
         0 => {
             if !create_missing {
-                return Err(NovaError::Paging);
+                return Err(NovaError::Paging("No table defined."));
             }
             let new_phys_page_table_address = reserve_page();
 
@@ -406,7 +406,9 @@ fn next_table(
 
             Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable)
         }
-        1 => Err(NovaError::Paging),
+        1 => Err(NovaError::Paging(
+            "Can't navigate table due to block mapping.",
+        )),
         3 => Ok(resolve_table_addr(table.0[offset].address()) as *mut PageTable),
         _ => unreachable!(),
     }

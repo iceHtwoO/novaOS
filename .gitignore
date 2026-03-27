@@ -6,3 +6,8 @@ settings.json
 .DS_Store
 .venv
 .nvimlog
+__pycache__
+.pytest_cache
+
+build/
+

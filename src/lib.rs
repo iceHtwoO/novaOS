@@ -18,9 +18,10 @@ use crate::{
         allocate_memory, PhysSource, KERNEL_VIRTUAL_MEM_SPACE, LEVEL2_BLOCK_SIZE, NORMAL_MEM, UXN,
         WRITABLE,
     },
+    application_manager::initialize_app_manager,
+    console::{flush_terminal, init_terminal},
     interrupt_handlers::irq::initialize_interrupt_handler,
     pi3::timer::sleep_s,
-    terminal::{flush_terminal, init_terminal},
 };
 
 static LOGGER: UartLogger = UartLogger;
@@ -57,8 +58,9 @@ pub mod configuration;
 pub mod framebuffer;
 pub mod interrupt_handlers;
 
+pub mod application_manager;
+pub mod console;
 pub mod pi3;
-pub mod terminal;
 
 #[inline(always)]
 pub unsafe fn read_address(address: u32) -> u32 {
@@ -85,6 +87,7 @@ pub fn get_current_el() -> u64 {
 pub fn initialize_kernel() {
     unsafe { initialize_kernel_heap() };
     initialize_interrupt_handler();
+    initialize_app_manager();
     init_terminal();
 }
 
