@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use alloc::string::String;
 
 use crate::{
@@ -44,15 +42,14 @@ impl Terminal {
             "temp" => {
                 println!("{}", read_soc_temp([0]).unwrap()[1]);
             }
-            "app" => unsafe {
+            "app" => {
                 if let Some(app_id) = parts.next().and_then(|a| a.parse::<usize>().ok()) {
-                    let i = 69;
-                    asm!("", in("x0") i);
-                    let _ = start_app(app_id);
+                    let args = parts.collect();
+                    let _ = start_app(app_id, args);
                 } else {
                     println!("App ID not set.");
                 }
-            },
+            }
             _ => {
                 println!("Unknown command: \"{}\"", self.input);
             }

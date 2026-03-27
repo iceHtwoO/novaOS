@@ -6,7 +6,7 @@ use crate::{
     configuration::memory_mapping::{APPLICATION_TRANSLATION_TABLE_VA, EL0_STACK_TOP},
 };
 use alloc::vec::Vec;
-use core::arch::asm;
+use core::{arch::asm, mem, ptr::write_volatile};
 use log::error;
 use nova_error::NovaError;
 use spin::Mutex;
@@ -49,15 +49,40 @@ impl Application {
     /// `SPSR_EL1` -> Saved Program State Register (settings for `eret` behaviour)
     /// `SP_EL0` -> Stack Pointer Register (virtual_address of stack Pointer)
     /// `TTBR0_EL1` -> Translation Table base Register Register
-    pub fn start(&self) {
+    pub fn start(&self, args: Vec<&str>) {
+        let size = args.len();
+
+        let mut sp = EL0_STACK_TOP;
+        let mut arg_addresses = Vec::with_capacity(size);
+        for value in args {
+            sp -= value.len() * mem::size_of::<u8>();
+            let pointer = sp as *mut u8;
+            unsafe { core::ptr::copy(value.as_ptr(), pointer, value.len()) };
+            arg_addresses.push(pointer);
+        }
+        sp = align_down(sp, 16);
+
+        let argv = sp;
+
+        for addr in arg_addresses {
+            unsafe { write_volatile(sp as *mut *const u8, addr) };
+            sp -= mem::size_of::<*const u8>();
+        }
+
         unsafe {
             asm!("msr ELR_EL1, {}", in(reg) self.start_addr);
             asm!("msr SPSR_EL1, {0:x}", in(reg) 0);
-            asm!("msr SP_EL0, {0:x}", in(reg) EL0_STACK_TOP);
+            asm!("msr SP_EL0, {0:x}", in(reg) sp);
             asm!("msr TTBR0_EL1, {}", in(reg) self.table_ptr as usize);
+            asm!("", in("x0") size);
+            asm!("", in("x1") argv);
             asm!("eret");
         }
     }
+}
+
+fn align_down(sp: usize, align: usize) -> usize {
+    sp & !(align - 1)
 }
 
 struct AppManager {
@@ -87,15 +112,13 @@ pub fn add_app(app: Application) -> Result<(), NovaError> {
         Err(NovaError::General("AppManager not initalized."))
     }
 }
-
-pub fn start_app(index: usize) -> Result<(), NovaError> {
-    if let Some(app) = APP_MANAGER
+pub fn start_app(index: usize, args: Vec<&str>) -> Result<(), NovaError> { if let Some(app) = APP_MANAGER
         .lock()
         .apps
         .as_mut()
         .and_then(|am| am.get(index))
     {
-        app.start();
+        app.start(args);
         unreachable!()
     } else {
         error!("Unable to start app due to invalid App ID.");

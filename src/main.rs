@@ -10,7 +10,7 @@ use log::{debug, info};
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{slice, vec::Vec};
 use nova::{
     aarch64::registers::{daif, read_id_aa64mmfr0_el1},
     application_manager::{add_app, Application},
@@ -25,6 +25,7 @@ use nova::{
         },
         uart::uart_init,
     },
+    pi3::timer::sleep_s,
     print, println,
 };
 
@@ -101,7 +102,6 @@ pub extern "C" fn kernel_main() {
         test_vector.push(i);
     }
     debug!("heap allocation test: {:?}", test_vector);
-
     enable_irq_source(IRQSource::UartInt);
 
     let app = Application::new(el0 as *const () as usize);
@@ -109,18 +109,33 @@ pub extern "C" fn kernel_main() {
 
     kernel_loop();
 }
-
 #[no_mangle]
 pub extern "C" fn kernel_loop() {
     daif::unmask_all();
-
     #[allow(clippy::empty_loop)]
     loop {}
 }
-
 #[no_mangle]
-pub extern "C" fn el0(input: usize) {
+pub unsafe extern "C" fn el0(argc: usize, argv: *const *const u8) {
     println!("Jumped into EL0");
+    println!("num: {}", argc);
+    println!("argv: {:?}", argv);
+
+    let raw_args = unsafe { slice::from_raw_parts(argv, argc) };
+    let first_arg = raw_args
+        .iter()
+        .map(|&arg_ptr| {
+            if arg_ptr.is_null() {
+                return "";
+            }
+
+            let c_str = unsafe { core::ffi::CStr::from_ptr(arg_ptr) };
+            let str_slice = c_str.to_str().unwrap();
+            str_slice
+        })
+        .next();
+
+    sleep_s(1);
 
     // Set GPIO 26 to Input
     enable_irq_source(IRQSource::GpioInt0); //26 is on the first GPIO bank
@@ -143,25 +158,30 @@ pub extern "C" fn el0(input: usize) {
 
     let _temp = syscall(67);
 
-    println!("Calculting prime to: {}", input);
+    if let Some(num) = first_arg.and_then(|val| val.parse::<usize>().ok()) {
+        println!("Calculting prime to: {}", num);
 
-    for i in 3..input {
-        let mut is_prime = true;
-        for j in 3..i {
-            if i == j {
-                continue;
+        for i in 3..num {
+            let mut is_prime = true;
+            for j in 3..i {
+                if i == j {
+                    continue;
+                }
+                if i % j == 0 {
+                    is_prime = false;
+                }
             }
-            if i % j == 0 {
-                is_prime = false;
+            if is_prime {
+                print!("{} ", i);
             }
         }
-        if is_prime {
-            print!("{} ", i);
-        }
+        println!("");
+    } else {
+        println!("Input NaN");
     }
-    println!("");
 
     blink_gpio(SpecificGpio::OnboardLed as u8, 500);
+    syscall(0);
 }
 
 fn cos(x: u32) -> f64 {
