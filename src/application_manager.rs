@@ -11,6 +11,18 @@ use log::error;
 use nova_error::NovaError;
 use spin::Mutex;
 
+struct AppManager {
+    apps: Option<Vec<Application>>,
+}
+
+impl AppManager {
+    const fn new() -> Self {
+        Self { apps: None }
+    }
+}
+
+unsafe impl Send for AppManager {}
+
 pub struct Application {
     pub table_ptr: *mut TableEntry,
     pub start_addr: usize,
@@ -74,8 +86,7 @@ impl Application {
             asm!("msr SPSR_EL1, {0:x}", in(reg) 0);
             asm!("msr SP_EL0, {0:x}", in(reg) sp);
             asm!("msr TTBR0_EL1, {}", in(reg) self.table_ptr as usize);
-            asm!("", in("x0") size);
-            asm!("", in("x1") argv);
+            asm!("", in("x0") size, in("x1") argv);
             asm!("eret");
         }
     }
@@ -84,18 +95,6 @@ impl Application {
 fn align_down(sp: usize, align: usize) -> usize {
     sp & !(align - 1)
 }
-
-struct AppManager {
-    apps: Option<Vec<Application>>,
-}
-
-impl AppManager {
-    const fn new() -> Self {
-        Self { apps: None }
-    }
-}
-
-unsafe impl Send for AppManager {}
 
 static APP_MANAGER: Mutex<AppManager> = Mutex::new(AppManager::new());
 
@@ -112,7 +111,9 @@ pub fn add_app(app: Application) -> Result<(), NovaError> {
         Err(NovaError::General("AppManager not initalized."))
     }
 }
-pub fn start_app(index: usize, args: Vec<&str>) -> Result<(), NovaError> { if let Some(app) = APP_MANAGER
+
+pub fn start_app(index: usize, args: Vec<&str>) -> Result<(), NovaError> {
+    if let Some(app) = APP_MANAGER
         .lock()
         .apps
         .as_mut()

@@ -19,9 +19,9 @@ use crate::{
         WRITABLE,
     },
     application_manager::initialize_app_manager,
+    console::{flush_terminal, init_terminal},
     interrupt_handlers::irq::initialize_interrupt_handler,
     pi3::timer::sleep_s,
-    terminal::{flush_terminal, init_terminal},
 };
 
 static LOGGER: UartLogger = UartLogger;
@@ -59,8 +59,8 @@ pub mod framebuffer;
 pub mod interrupt_handlers;
 
 pub mod application_manager;
+pub mod console;
 pub mod pi3;
-pub mod terminal;
 
 #[inline(always)]
 pub unsafe fn read_address(address: u32) -> u32 {
